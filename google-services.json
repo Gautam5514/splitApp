@@ -1,0 +1,62 @@
+{
+  "project_info": {
+    "project_number": "803396684704",
+    "project_id": "agent-assist-vw57a",
+    "storage_bucket": "agent-assist-vw57a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:803396684704:android:617f91c16533b327eb72c5",
+        "android_client_info": {
+          "package_name": "com.kunal.splitapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "803396684704-1m1eqa0vms3a0h6md9a0p4bpevauntp5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kunal.splitapp",
+            "certificate_hash": "c6c13b706e74af8aac3ebb820be96f0d039d51be"
+          }
+        },
+        {
+          "client_id": "803396684704-ncu0hc5mpm28ftf0scvqpbpr2uglvtgd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kunal.splitapp",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "803396684704-3ilatdscisg178ouh81o0pere3s1v913.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCiGqJa98cctJDkFoUsDwm218EwI3jefog"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "803396684704-3ilatdscisg178ouh81o0pere3s1v913.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "803396684704-t2m1r9sk8qqod63jkd1fhl8mr61qb1o0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "host.exp.exponent"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

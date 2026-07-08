@@ -4,26 +4,55 @@
     "slug": "splitApp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./logo.png",
     "scheme": "splitapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kunal.splitapp",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "associatedDomains": [
+        "applinks:auth.expo.io",
+        "applinks:auth.expo.io"
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./logo.png",
+        "monochromeImage": "./logo.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.kunal.splitapp",
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "splitapp",
+              "host": "auth"
+            },
+            {
+              "scheme": "com.kunal.splitapp",
+              "pathPrefix": "/oauthredirect"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./logo.png"
     },
     "plugins": [
       "expo-router",
@@ -38,11 +67,38 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-web-browser",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.803396684704-t2m1r9sk8qqod63jkd1fhl8mr61qb1o0"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#4f46e5",
+          "sounds": []
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "googleRedirectUri": "https://auth.expo.io/@kunalkumar/splitApp",
+      "googleWebClientId": "803396684704-3ilatdscisg178ouh81o0pere3s1v913.apps.googleusercontent.com",
+      "googleAndroidClientId": "803396684704-ncu0hc5mpm28ftf0scvqpbpr2uglvtgd.apps.googleusercontent.com",
+      "googleIosClientId": "803396684704-t2m1r9sk8qqod63jkd1fhl8mr61qb1o0.apps.googleusercontent.com",
+      "googleExpoClientId": "803396684704-o4davigc3jvbf5i13dqj5djpss3946bn.apps.googleusercontent.com",
+      "router": {},
+      "eas": {
+        "projectId": "a06f7201-44fc-4ef3-a7f2-efda413a7d1c"
+      }
     }
   }
 }
