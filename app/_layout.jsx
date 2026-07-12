@@ -27,6 +27,7 @@ export default function RootLayout() {
           <Stack.Screen name="settings" />
           <Stack.Screen name="profile-edit" />
           <Stack.Screen name="appearance" />
+          <Stack.Screen name="theme-store" />
           <Stack.Screen name="rewards" />
           <Stack.Screen name="create-group" />
           <Stack.Screen name="info/terms" />
