@@ -1,7 +1,7 @@
 import { useTheme } from "@/context/ThemeContext";
 import { Colors } from "@/constants/theme";
 import { router } from "expo-router";
-import { ArrowLeft, Check, Monitor, Moon, Smartphone, Sun } from "lucide-react-native";
+import { ArrowLeft, Check, ChevronRight, Monitor, Moon, Palette, Smartphone, Sun } from "lucide-react-native";
 import { useColorScheme, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -97,7 +97,21 @@ export default function AppearanceScreen() {
                     </View>
                 </View>
 
-                <Text style={styles.note}>More accent colors and fonts are coming soon.</Text>
+                {/* Theme store entry */}
+                <TouchableOpacity
+                    style={styles.storeRow}
+                    onPress={() => router.push("/theme-store")}
+                    activeOpacity={0.85}
+                >
+                    <View style={styles.storeIcon}>
+                        <Palette size={20} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.modeLabel}>Theme Store</Text>
+                        <Text style={styles.modeDesc}>Accent colors, premium themes & fonts</Text>
+                    </View>
+                    <ChevronRight size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
     );
@@ -154,5 +168,13 @@ const getStyles = (colors) => StyleSheet.create({
     pBtnOutline: { flex: 1, borderRadius: 8, borderWidth: 1, paddingVertical: 10, alignItems: "center" },
     pBtnOutlineText: { fontWeight: "700", fontSize: 13 },
 
-    note: { textAlign: "center", fontSize: 12, color: colors.textSecondary, marginTop: 24 },
+    storeRow: {
+        flexDirection: "row", alignItems: "center", gap: 14, marginTop: 24,
+        backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border,
+        borderRadius: 8, padding: 14,
+    },
+    storeIcon: {
+        width: 42, height: 42, borderRadius: 8, alignItems: "center", justifyContent: "center",
+        backgroundColor: colors.primaryLight,
+    },
 });

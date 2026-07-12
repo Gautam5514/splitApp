@@ -7,7 +7,6 @@ import { StatusBar } from "expo-status-bar";
 import { ArrowLeft, Bot, Send, Sparkles } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
-    Alert,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -57,37 +56,31 @@ export default function AiChatScreen() {
         setPrompt("");
 
         try {
-            const res = await api.post("/ai/query", { prompt: trimmedPrompt, provider });
+            // AI generation (DB context + Gemini/OpenAI with provider fallback)
+            // routinely outlasts the api client's global 15s timeout, so give
+            // this one request its own generous budget.
+            const res = await api.post(
+                "/ai/query",
+                { prompt: trimmedPrompt, provider },
+                { timeout: 90000 }
+            );
             const aiText = res.data?.text || "I'm sorry, I couldn't find an answer.";
             const usedProvider = res.data?.provider;
             setMessages((prev) => [...prev, { role: "ai", content: aiText, provider: usedProvider }]);
         } catch (err) {
             const status = err?.response?.status;
-            const serverMessage =
-                err?.response?.data?.message ||
-                err?.response?.data?.error ||
-                err?.message ||
-                "Unknown error";
+            const timedOut = err?.code === "ECONNABORTED";
+            // The backend sends actionable messages (rate limited, provider
+            // overloaded, key rejected) — show those instead of a generic one.
+            const errText = timedOut
+                ? "The AI is taking too long to respond. Please try again."
+                : err?.response?.data?.message ||
+                  err?.response?.data?.error ||
+                  "SplitEase AI is unavailable right now. Please check your connection and try again.";
 
-            console.warn("AI request failed:", status, serverMessage);
+            console.warn("AI request failed:", status ?? err?.code, errText);
 
-            setMessages((prev) => [
-                ...prev,
-                {
-                    role: "ai",
-                    content:
-                        status === 500
-                            ? "The AI service is having trouble right now. Please try again in a moment."
-                            : "I couldn't reach the AI service. Please check your connection and try again.",
-                },
-            ]);
-
-            Alert.alert(
-                "AI Unavailable",
-                status === 500
-                    ? "The AI service returned an internal error. Please try again later."
-                    : "The AI service could not be reached. Please try again."
-            );
+            setMessages((prev) => [...prev, { role: "ai", content: errText, error: true }]);
         } finally {
             setLoading(false);
         }
@@ -212,7 +205,13 @@ const ChatMessage = ({ message, colors, styles }) => {
                 ]}
             >
                 {providerLabel && <Text style={styles.providerTag}>via {providerLabel}</Text>}
-                <Text style={[styles.messageText, isUser ? styles.messageTextUser : styles.messageTextAi]}>
+                <Text
+                    style={[
+                        styles.messageText,
+                        isUser ? styles.messageTextUser : styles.messageTextAi,
+                        message.error && { color: colors.error },
+                    ]}
+                >
                     {message.content}
                 </Text>
             </View>
