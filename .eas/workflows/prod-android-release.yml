@@ -1,0 +1,29 @@
+
+# Deploy to Play Store
+#
+# On every push to main, builds a production Android app bundle (AAB)
+# and submits it to Google Play automatically.
+# Learn more: https://docs.expo.dev/eas/workflows/get-started/
+
+name: Deploy Android to Play Store
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_android:
+    name: Build Android
+    type: build
+    params:
+      platform: android
+      profile: production
+  submit_android:
+    name: Submit to Play Store
+    needs:
+      - build_android
+    type: submit
+    params:
+      build_id: ${{ needs.build_android.outputs.build_id }}
+      profile: production

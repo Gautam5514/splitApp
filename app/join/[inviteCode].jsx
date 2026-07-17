@@ -87,7 +87,7 @@ export default function JoinGroupScreen() {
                         <View style={[styles.iconCircle, { backgroundColor: colors.successLight }]}>
                             <CheckCircle2 size={32} color={colors.success} />
                         </View>
-                        <Text style={styles.title}>You're in!</Text>
+                        <Text style={styles.title}>You{"'"}re in!</Text>
                         <Text style={styles.subtitle}>Taking you to the group…</Text>
                     </>
                 )}
@@ -99,7 +99,7 @@ export default function JoinGroupScreen() {
                         </View>
                         <Text style={styles.title}>Sign in to join</Text>
                         <Text style={styles.subtitle}>
-                            Log in or create an account to join this group. We'll bring you right back.
+                            Log in or create an account to join this group. We{"'"}ll bring you right back.
                         </Text>
                         <TouchableOpacity style={styles.primaryBtn} onPress={goToLogin} activeOpacity={0.85}>
                             <LogIn size={16} color="#FFFFFF" />
@@ -113,7 +113,7 @@ export default function JoinGroupScreen() {
                         <View style={[styles.iconCircle, { backgroundColor: colors.errorLight }]}>
                             <AlertCircle size={32} color={colors.error} />
                         </View>
-                        <Text style={styles.title}>Couldn't join</Text>
+                        <Text style={styles.title}>Couldn{"'"}t join</Text>
                         <Text style={styles.subtitle}>{errorMsg}</Text>
                         <View style={styles.errorActions}>
                             <TouchableOpacity style={styles.secondaryBtn} onPress={join} activeOpacity={0.85}>

@@ -134,7 +134,7 @@ export default function NewChatModal({ visible, onClose }) {
                     />
                 ) : query.trim() ? (
                     <View style={styles.center}>
-                        <Text style={styles.muted}>No users found matching "{query.trim()}"</Text>
+                        <Text style={styles.muted}>No users found matching {`"${query.trim()}"`}</Text>
                     </View>
                 ) : (
                     <View style={styles.center}>

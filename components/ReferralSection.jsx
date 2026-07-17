@@ -111,7 +111,7 @@ export default function ReferralSection() {
         return (
             <View style={styles.errorCard}>
                 <AlertCircle size={24} color={colors.textSecondary} />
-                <Text style={styles.errorText}>Couldn't load your referral details.</Text>
+                <Text style={styles.errorText}>Couldn{"'"}t load your referral details.</Text>
                 <TouchableOpacity onPress={fetchData} activeOpacity={0.7}>
                     <Text style={styles.retryText}>Try again</Text>
                 </TouchableOpacity>
@@ -277,9 +277,9 @@ export default function ReferralSection() {
                         <View style={styles.invitedEmptyIcon}>
                             <Gift size={24} color={colors.primary} />
                         </View>
-                        <Text style={styles.invitedEmptyTitle}>You haven't invited anyone yet</Text>
+                        <Text style={styles.invitedEmptyTitle}>You haven{"'"}t invited anyone yet</Text>
                         <Text style={styles.invitedEmptyDesc}>
-                            Share your link with friends — you'll both earn coins instantly when they join.
+                            Share your link with friends — you{"'"}ll both earn coins instantly when they join.
                         </Text>
                         <TouchableOpacity style={styles.invitedShareBtn} onPress={shareLink} activeOpacity={0.85}>
                             <Share2 size={13} color="#FFFFFF" />

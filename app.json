@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "splitApp",
+    "name": "SplitEase",
     "slug": "splitApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,12 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.kunal.splitapp",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "associatedDomains": [
-        "applinks:auth.expo.io",
-        "applinks:auth.expo.io"
-      ],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "SplitEase uses your photo library when you choose a profile photo, receipt, or chat attachment."
       }
     },
     "android": {
@@ -31,6 +28,23 @@
       "package": "com.kunal.splitapp",
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "splitapp",
+              "host": "auth"
+            },
+            {
+              "scheme": "com.kunal.splitapp",
+              "pathPrefix": "/oauthredirect"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
         {
           "action": "VIEW",
           "data": [
@@ -83,7 +97,9 @@
           "sounds": []
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
