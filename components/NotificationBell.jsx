@@ -115,7 +115,7 @@ export default function NotificationBell({ iconColor }) {
                         {notifications.length === 0 ? (
                             <View style={styles.empty}>
                                 <BellOff size={28} color={colors.textSecondary} />
-                                <Text style={styles.emptyText}>You're all caught up</Text>
+                                <Text style={styles.emptyText}>You{"'"}re all caught up</Text>
                             </View>
                         ) : (
                             <ScrollView

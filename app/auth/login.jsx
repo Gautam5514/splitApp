@@ -358,7 +358,7 @@ export default function LoginScreen() {
                   <ShieldCheck size={26} color={accent} />
                 </View>
               </View>
-              <Text style={[styles.headlineSm, { color: textColor }]}>Verify it's you</Text>
+              <Text style={[styles.headlineSm, { color: textColor }]}>Verify it{"'"}s you</Text>
               <Text style={[styles.sub, { color: subColor, textAlign: "center" }]}>
                 We sent a 6-digit code to{"\n"}
                 <Text style={{ color: textColor, fontWeight: "700" }}>{email}</Text>
@@ -420,7 +420,7 @@ export default function LoginScreen() {
             <Animated.View entering={FadeInDown.duration(400)} style={styles.form}>
               <Text style={[styles.headlineSm, { color: textColor }]}>Reset password</Text>
               <Text style={[styles.sub, { color: subColor }]}>
-                Enter your account email and we'll send you a secure reset link.
+                Enter your account email and we{"'"}ll send you a secure reset link.
               </Text>
 
               <View style={styles.fieldBlock}>
@@ -466,7 +466,7 @@ export default function LoginScreen() {
               <Text style={[styles.sub, { color: subColor, textAlign: "center" }]}>
                 If an account exists for{"\n"}
                 <Text style={{ color: textColor, fontWeight: "700" }}>{forgotEmail}</Text>
-                {"\n"}you'll receive a reset link shortly. The link expires in 15 minutes.
+                {"\n"}you{"'"}ll receive a reset link shortly. The link expires in 15 minutes.
               </Text>
 
               <TouchableOpacity

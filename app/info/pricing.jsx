@@ -111,7 +111,7 @@ export default function PricingScreen() {
                     </View>
                 ))}
 
-                <Text style={styles.sectionHeading}>What's included</Text>
+                <Text style={styles.sectionHeading}>What{"'"}s included</Text>
                 {FEATURE_GROUPS.map((group) => (
                     <View key={group.title} style={styles.card}>
                         <Text style={styles.cardTitle}>{group.title}</Text>
