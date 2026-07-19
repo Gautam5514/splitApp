@@ -221,7 +221,7 @@ export default function Dashboard() {
         ]);
 
     const openGroup = (id) => router.push({ pathname: "/groups/[id]", params: { id, returnTo: "home" } });
-    const handleLogout = async () => { await logout(); router.replace("/"); };
+    const handleLogout = async () => { await logout(); router.replace("/auth/login"); };
 
     const isCreator = (g) => {
         const cid = getEntityId(g?.createdBy) || g?.createdBy;

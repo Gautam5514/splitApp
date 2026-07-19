@@ -19,9 +19,17 @@ import Animated, {
  *   <Loader size={48} label="Loading…" />  // centered with caption
  *   <FullScreenLoader label="Gathering your insights…" />
  */
+function toFullHex(hex) {
+    if (typeof hex !== "string") return hex;
+    const match = /^#([0-9a-f]{3})$/i.exec(hex);
+    if (!match) return hex;
+    const [r, g, b] = match[1];
+    return `#${r}${r}${g}${g}${b}${b}`;
+}
+
 export function Loader({ size = 44, color, label }) {
     const { colors } = useTheme();
-    const tint = color || colors.primary;
+    const tint = toFullHex(color || colors.primary);
 
     const spin = useSharedValue(0);
     const spinBack = useSharedValue(0);

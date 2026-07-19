@@ -187,7 +187,11 @@ export default function LoginScreen() {
 
   const onBack = () => {
     if (step === "start") {
-      router.back();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/");
+      }
     } else if (step === "login") {
       setStep("start");
     } else {
