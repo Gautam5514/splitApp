@@ -1,6 +1,6 @@
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
 import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import {
@@ -39,17 +39,26 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle, Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
 const { width, height } = Dimensions.get("window");
 
-const AURORA_DARK = ["#0A0613", "#150C2E", "#0A0714"];
-const AURORA_LIGHT = ["#EEF2FF", "#F3F0FF", "#FFFFFF"];
 const BTN_GRADIENT = ["#6366F1", "#8B5CF6"];
+const FEATURE_GRADIENTS = [
+  ["#6366F1", "#8B5CF6"],
+  ["#0EA5E9", "#6366F1"],
+  ["#F59E0B", "#F97316"],
+  ["#10B981", "#0EA5E9"],
+];
+const RING_COLORS = ["#6366F1", "#8B5CF6", "#22D3EE"];
+const RING_R = 80;
+const RING_CIRC = 2 * Math.PI * RING_R;
+const RING_ARC = RING_CIRC / 3 - 34;
 
 const DEMO_MEMBERS = [
-  { initial: "A", bg: "#6366F1" },
-  { initial: "R", bg: "#0EA5E9" },
-  { initial: "K", bg: "#F59E0B" },
+  { initial: "A", bg: "#6366F1", share: "₹3,100" },
+  { initial: "R", bg: "#0EA5E9", share: "₹3,100" },
+  { initial: "K", bg: "#F59E0B", share: "₹3,100" },
 ];
 
 const FEATURES = [
@@ -60,18 +69,18 @@ const FEATURES = [
   },
   {
     Icon: MessageCircle,
-    title: "Built-in group chat",
-    desc: "Plan the trip and settle the bill in the same conversation.",
+    title: "Group chat",
+    desc: "Plan and settle up in the same thread.",
   },
   {
     Icon: Bot,
     title: "AI assistant",
-    desc: "Ask \"who owes what?\" and get instant answers about your trips.",
+    desc: "Ask who owes what and get instant answers.",
   },
   {
     Icon: ReceiptText,
     title: "Scan receipts",
-    desc: "Snap a bill and let SplitEase read the amounts for you.",
+    desc: "Snap a bill and let it read the amounts.",
   },
 ];
 
@@ -97,28 +106,27 @@ export default function HomeScreen() {
   const [isSplashVisible, setSplashVisible] = useState(true);
   const [isMinTimeElapsed, setMinTimeElapsed] = useState(false);
   const { token, loading } = useAuth();
-  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const isDark = theme === "dark";
-  const aurora = isDark ? AURORA_DARK : AURORA_LIGHT;
-  const glassTint = isDark ? "dark" : "light";
-  const glassBorder = isDark ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.75)";
-  const glassFill = isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.45)";
-  const textMain = isDark ? "#FFFFFF" : "#15102B";
-  const textDim = isDark ? "rgba(255,255,255,0.55)" : "rgba(30,20,60,0.55)";
-  const accent = isDark ? "#A78BFA" : "#6366F1";
-  const cardBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.8)";
-  const settledBg = isDark ? "rgba(52,211,153,0.14)" : "rgba(16,185,129,0.12)";
-  const settledFg = isDark ? "#34D399" : "#059669";
+  // First-open screen keeps a fixed black brand look, independent of the
+  // user's in-app theme preference (which only applies once logged in).
+  const glassTint = "dark";
+  const glassBorder = "rgba(255,255,255,0.12)";
+  const glassFill = "rgba(255,255,255,0.05)";
+  const textMain = "#FFFFFF";
+  const textDim = "rgba(255,255,255,0.55)";
+  const accent = "#A78BFA";
+  const cardBg = "rgba(255,255,255,0.06)";
+  const settledBg = "rgba(52,211,153,0.14)";
+  const settledFg = "#34D399";
 
-  const ring = useSharedValue(1);
-  const ring2 = useSharedValue(1);
+  const spin = useSharedValue(0);
+  const pulse = useSharedValue(0.5);
   const float = useSharedValue(0);
 
   useEffect(() => {
-    ring.value = withRepeat(withTiming(1.22, { duration: 2200 }), -1, true);
-    ring2.value = withRepeat(withTiming(1.45, { duration: 2200 }), -1, true);
+    spin.value = withRepeat(withTiming(360, { duration: 14000, easing: Easing.linear }), -1);
+    pulse.value = withRepeat(withTiming(1, { duration: 3400, easing: Easing.inOut(Easing.quad) }), -1, true);
     float.value = withRepeat(
       withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.quad) }),
       -1,
@@ -126,7 +134,7 @@ export default function HomeScreen() {
     );
     const timer = setTimeout(() => setMinTimeElapsed(true), 2200);
     return () => clearTimeout(timer);
-  }, [ring, ring2, float]);
+  }, [spin, pulse, float]);
 
   useEffect(() => {
     if (!loading && isMinTimeElapsed) {
@@ -135,8 +143,8 @@ export default function HomeScreen() {
     }
   }, [loading, isMinTimeElapsed, token]);
 
-  const ringStyle = useAnimatedStyle(() => ({ transform: [{ scale: ring.value }] }));
-  const ring2Style = useAnimatedStyle(() => ({ transform: [{ scale: ring2.value }] }));
+  const spinStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value}deg` }] }));
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
   const floatStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: (float.value - 0.5) * -8 }],
   }));
@@ -145,31 +153,80 @@ export default function HomeScreen() {
     opacity: 0.5 + float.value * 0.5,
   }));
 
-  // Shared aurora background + floating color orbs.
+  const handlePrimaryPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push("/auth/register");
+  };
+  const handleSecondaryPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/auth/login");
+  };
+
+  // Painterly mesh-gradient background on pure black — one breathing blob
+  // for a subtle sense of life without ever leaving "simple and dark".
   const Background = () => (
-    <>
-      <LinearGradient colors={aurora} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <View pointerEvents="none" style={[styles.orb, styles.orbA]} />
-      <View pointerEvents="none" style={[styles.orb, styles.orbB]} />
-      <View pointerEvents="none" style={[styles.orb, styles.orbC, { opacity: isDark ? 0.5 : 0.35 }]} />
-    </>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width={width} height={height}>
+        <Defs>
+          <RadialGradient id="blobA" cx="18%" cy="10%" r="55%">
+            <Stop offset="0%" stopColor="#4F46E5" stopOpacity="0.5" />
+            <Stop offset="100%" stopColor="#4F46E5" stopOpacity="0" />
+          </RadialGradient>
+          <RadialGradient id="blobC" cx="80%" cy="92%" r="60%">
+            <Stop offset="0%" stopColor="#0EA5E9" stopOpacity="0.22" />
+            <Stop offset="100%" stopColor="#0EA5E9" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width={width} height={height} fill="#000000" />
+        <Rect x="0" y="0" width={width} height={height} fill="url(#blobA)" />
+        <Rect x="0" y="0" width={width} height={height} fill="url(#blobC)" />
+      </Svg>
+      <Animated.View style={[StyleSheet.absoluteFill, pulseStyle]}>
+        <Svg width={width} height={height}>
+          <Defs>
+            <RadialGradient id="blobB" cx="85%" cy="26%" r="48%">
+              <Stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.4" />
+              <Stop offset="100%" stopColor="#8B5CF6" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width={width} height={height} fill="url(#blobB)" />
+        </Svg>
+      </Animated.View>
+    </View>
   );
 
   // ─── Splash ───────────────────────────────────────────────────────────────
   if (isSplashVisible) {
     return (
       <View style={styles.fill}>
-        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
         <Background />
 
-        <Animated.View style={[styles.ringOuter, { borderColor: glassBorder }, ringStyle]} />
-        <Animated.View style={[styles.ringInner, { borderColor: glassBorder }, ring2Style]} />
+        <View style={styles.splashCenter}>
+          <View style={styles.splashMark}>
+            <Animated.View style={spinStyle}>
+              <Svg width={180} height={180} viewBox="0 0 180 180">
+                {RING_COLORS.map((color, i) => (
+                  <Circle
+                    key={color}
+                    cx="90"
+                    cy="90"
+                    r={RING_R}
+                    stroke={color}
+                    strokeWidth={7}
+                    strokeLinecap="round"
+                    fill="none"
+                    strokeDasharray={`${RING_ARC} ${RING_CIRC}`}
+                    strokeDashoffset={-i * (RING_CIRC / 3)}
+                  />
+                ))}
+              </Svg>
+            </Animated.View>
 
-        <Animated.View entering={ZoomIn.duration(700).springify()} style={styles.splashCenter}>
-          <BlurView intensity={isDark ? 40 : 60} tint={glassTint} experimentalBlurMethod="dimezisBlurView" style={[styles.splashIcon, { borderColor: glassBorder }]}>
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: glassFill }]} />
-            <Image source={require("../assets/images/icon.png")} style={{ width: 74, height: 74, borderRadius: 18 }} resizeMode="contain" />
-          </BlurView>
+            <Animated.View entering={ZoomIn.duration(700).springify()} style={styles.splashIconWrap}>
+              <Image source={require("../assets/images/icon.png")} style={{ width: 62, height: 62, borderRadius: 16 }} resizeMode="contain" />
+            </Animated.View>
+          </View>
 
           <Animated.Text entering={FadeInDown.delay(280).duration(700)} style={[styles.splashName, { color: textMain }]}>
             SplitEase
@@ -177,11 +234,11 @@ export default function HomeScreen() {
           <Animated.Text entering={FadeInDown.delay(450).duration(700)} style={[styles.splashTagline, { color: textDim }]}>
             Split expenses effortlessly
           </Animated.Text>
-        </Animated.View>
+        </View>
 
         <Animated.View entering={FadeIn.delay(900)} style={styles.dots}>
           {[0, 1, 2].map((i) => (
-            <View key={i} style={[styles.dot, i === 1 ? { backgroundColor: accent, transform: [{ scale: 1.35 }] } : { backgroundColor: isDark ? "rgba(255,255,255,0.25)" : "rgba(99,102,241,0.25)" }]} />
+            <View key={i} style={[styles.dot, i === 1 ? { backgroundColor: accent, transform: [{ scale: 1.35 }] } : { backgroundColor: "rgba(255,255,255,0.25)" }]} />
           ))}
         </Animated.View>
       </View>
@@ -191,7 +248,7 @@ export default function HomeScreen() {
   // ─── Landing ────────────────────────────────────────────────────────────────
   return (
     <View style={styles.fill}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <Background />
 
       <SafeAreaView style={styles.fill} edges={["top"]}>
@@ -207,48 +264,62 @@ export default function HomeScreen() {
         >
           {/* ── Section 1 · Hero ─────────────────────────────────────────── */}
           <View style={styles.heroSection}>
-            <Animated.View entering={ZoomIn.delay(120).duration(600).springify()} style={floatStyle}>
-              <LinearGradient colors={BTN_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroIcon}>
-                <Image source={require("../assets/images/icon.png")} style={{ width: 46, height: 46, borderRadius: 12 }} resizeMode="contain" />
-              </LinearGradient>
+            <Animated.View entering={FadeInDown.delay(80).duration(500)} style={[styles.kickerPill, { backgroundColor: cardBg, borderColor: glassBorder }]}>
+              <View style={[styles.kickerDot, { backgroundColor: accent }]} />
+              <Text style={[styles.kickerPillText, { color: textDim }]}>Built for trips & shared homes</Text>
             </Animated.View>
 
-            <Animated.Text entering={FadeInDown.delay(220).duration(650)} style={[styles.headline, { color: textMain }]}>
-              Split bills,{"\n"}not friendships.
+            <Animated.Text entering={FadeInDown.delay(200).duration(650)} style={[styles.headline, { color: textMain }]}>
+              Split bills,{"\n"}not <Text style={{ color: accent }}>friendships</Text>.
             </Animated.Text>
             <Animated.Text entering={FadeInDown.delay(320).duration(650)} style={[styles.subCopy, { color: textDim }]}>
               Track group expenses, settle up instantly, and travel together — without the math.
             </Animated.Text>
 
-            {/* Product moment — a live split, already settled */}
+            {/* Product moment — a real split, broken down per person */}
             <Animated.View
               entering={FadeInUp.delay(400).duration(650)}
-              style={[styles.demoCard, { backgroundColor: cardBg, borderColor: glassBorder }]}
+              style={[styles.demoCard, { backgroundColor: cardBg, borderColor: glassBorder }, floatStyle]}
             >
-              <View style={styles.demoLeft}>
-                <Text style={[styles.demoTitle, { color: textMain }]}>Goa Trip</Text>
-                <Text style={[styles.demoMeta, { color: textDim }]}>₹12,400 · 4 friends</Text>
-                <View style={styles.demoAvatars}>
-                  {DEMO_MEMBERS.map((m, i) => (
-                    <View key={m.initial} style={[styles.demoAvatar, { backgroundColor: m.bg, marginLeft: i === 0 ? 0 : -8, borderColor: isDark ? "#1B1433" : "#FFFFFF" }]}>
-                      <Text style={styles.demoAvatarText}>{m.initial}</Text>
-                    </View>
-                  ))}
-                  <View style={[styles.demoAvatar, styles.demoAvatarMore, { marginLeft: -8, borderColor: isDark ? "#1B1433" : "#FFFFFF" }]}>
-                    <Text style={[styles.demoAvatarText, { fontSize: 9 }]}>+1</Text>
-                  </View>
+              <View style={styles.demoHeaderRow}>
+                <View style={[styles.demoIconWrap, { backgroundColor: "rgba(167,139,250,0.16)" }]}>
+                  <ReceiptText size={18} color={accent} strokeWidth={2.2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.demoTitle, { color: textMain }]}>Goa Trip</Text>
+                  <Text style={[styles.demoMeta, { color: textDim }]}>4 friends · ₹12,400 total</Text>
+                </View>
+                <View style={[styles.settledChip, { backgroundColor: settledBg }]}>
+                  <CheckCircle2 size={12} color={settledFg} strokeWidth={2.5} />
+                  <Text style={[styles.settledText, { color: settledFg }]}>Settled</Text>
                 </View>
               </View>
-              <View style={[styles.settledChip, { backgroundColor: settledBg }]}>
-                <CheckCircle2 size={13} color={settledFg} strokeWidth={2.5} />
-                <Text style={[styles.settledText, { color: settledFg }]}>All settled</Text>
+
+              <View style={[styles.demoDivider, { backgroundColor: glassBorder }]} />
+
+              <View style={styles.demoSharesRow}>
+                {DEMO_MEMBERS.map((m) => (
+                  <View key={m.initial} style={styles.demoShareCol}>
+                    <View style={[styles.demoAvatar, { backgroundColor: m.bg }]}>
+                      <Text style={styles.demoAvatarText}>{m.initial}</Text>
+                    </View>
+                    <Text style={[styles.demoShareAmt, { color: textDim }]}>{m.share}</Text>
+                  </View>
+                ))}
+                <View style={styles.demoShareCol}>
+                  <View style={[styles.demoAvatar, styles.demoAvatarMore]}>
+                    <Text style={[styles.demoAvatarText, { fontSize: 10 }]}>+1</Text>
+                  </View>
+                  <Text style={[styles.demoShareAmt, { color: textDim }]}>₹3,100</Text>
+                </View>
               </View>
             </Animated.View>
 
             <Animated.View entering={FadeInUp.delay(480).duration(600)} style={styles.heroCta}>
-              <TouchableOpacity onPress={() => router.push("/auth/register")} activeOpacity={0.9} style={styles.primaryWrap}>
+              <TouchableOpacity onPress={handlePrimaryPress} activeOpacity={0.9} style={styles.primaryWrap}>
                 <LinearGradient colors={BTN_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primaryBtn}>
-                  <Text style={styles.primaryBtnText}>Get Started — it's free</Text>
+                  <LinearGradient colors={["rgba(255,255,255,0.22)", "rgba(255,255,255,0)"]} style={styles.btnSheen} pointerEvents="none" />
+                  <Text style={styles.primaryBtnText}>Get Started — it&rsquo;s free</Text>
                   <ArrowRight size={18} color="#fff" strokeWidth={2.4} />
                 </LinearGradient>
               </TouchableOpacity>
@@ -260,22 +331,24 @@ export default function HomeScreen() {
             </Animated.View>
           </View>
 
-          {/* ── Section 2 · Features ─────────────────────────────────────── */}
+          {/* ── Section 2 · Features (bento) ─────────────────────────────── */}
           <View style={styles.section}>
             <Text style={[styles.sectionKicker, { color: accent }]}>WHY SPLITEASE</Text>
             <Text style={[styles.sectionTitle, { color: textMain }]}>
               Everything your group needs
             </Text>
-            <Text style={[styles.sectionSub, { color: textDim }]}>
-              From the first plan to the final payment — it all lives in one place.
-            </Text>
 
             <View style={styles.featureGrid}>
-              {FEATURES.map(({ Icon, title, desc }) => (
+              {FEATURES.map(({ Icon, title, desc }, i) => (
                 <View key={title} style={[styles.featureCard, { backgroundColor: cardBg, borderColor: glassBorder }]}>
-                  <View style={[styles.featureIconWrap, { backgroundColor: isDark ? "rgba(167,139,250,0.14)" : "rgba(99,102,241,0.10)" }]}>
-                    <Icon size={19} color={accent} strokeWidth={2.2} />
-                  </View>
+                  <LinearGradient
+                    colors={FEATURE_GRADIENTS[i % FEATURE_GRADIENTS.length]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.featureIconWrap}
+                  >
+                    <Icon size={20} color="#fff" strokeWidth={2.2} />
+                  </LinearGradient>
                   <Text style={[styles.featureTitle, { color: textMain }]}>{title}</Text>
                   <Text style={[styles.featureDesc, { color: textDim }]}>{desc}</Text>
                 </View>
@@ -298,7 +371,7 @@ export default function HomeScreen() {
                       <Icon size={17} color="#fff" strokeWidth={2.2} />
                     </LinearGradient>
                     {i < STEPS.length - 1 && (
-                      <View style={[styles.stepLine, { backgroundColor: isDark ? "rgba(167,139,250,0.25)" : "rgba(99,102,241,0.2)" }]} />
+                      <View style={[styles.stepLine, { backgroundColor: "rgba(167,139,250,0.25)" }]} />
                     )}
                   </View>
                   <View style={styles.stepBody}>
@@ -314,15 +387,15 @@ export default function HomeScreen() {
           {/* ── Section 4 · Final CTA ────────────────────────────────────── */}
           <View style={styles.section}>
             <View style={styles.finalShadow}>
-              <BlurView intensity={isDark ? 45 : 70} tint={glassTint} experimentalBlurMethod="dimezisBlurView" style={[styles.finalCard, { borderColor: glassBorder }]}>
+              <BlurView intensity={45} tint={glassTint} experimentalBlurMethod="dimezisBlurView" style={[styles.finalCard, { borderColor: glassBorder }]}>
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: glassFill }]} />
                 <LinearGradient
-                  colors={isDark ? ["rgba(255,255,255,0.10)", "transparent"] : ["rgba(255,255,255,0.6)", "transparent"]}
+                  colors={["rgba(255,255,255,0.10)", "transparent"]}
                   style={styles.sheen}
                   pointerEvents="none"
                 />
 
-                <View style={[styles.featureIconWrap, { backgroundColor: isDark ? "rgba(167,139,250,0.14)" : "rgba(99,102,241,0.10)" }]}>
+                <View style={[styles.finalIconWrap, { backgroundColor: "rgba(167,139,250,0.14)" }]}>
                   <UserPlus size={20} color={accent} strokeWidth={2.2} />
                 </View>
                 <Text style={[styles.finalTitle, { color: textMain }]}>
@@ -332,14 +405,15 @@ export default function HomeScreen() {
                   Create your first group in under a minute.
                 </Text>
 
-                <TouchableOpacity onPress={() => router.push("/auth/register")} activeOpacity={0.9} style={styles.primaryWrap}>
+                <TouchableOpacity onPress={handlePrimaryPress} activeOpacity={0.9} style={styles.primaryWrap}>
                   <LinearGradient colors={BTN_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primaryBtn}>
-                    <Text style={styles.primaryBtnText}>Get Started — it's free</Text>
+                    <LinearGradient colors={["rgba(255,255,255,0.22)", "rgba(255,255,255,0)"]} style={styles.btnSheen} pointerEvents="none" />
+                    <Text style={styles.primaryBtnText}>Get Started — it&rsquo;s free</Text>
                     <ArrowRight size={18} color="#fff" strokeWidth={2.4} />
                   </LinearGradient>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => router.push("/auth/login")} activeOpacity={0.8} style={styles.secondaryWrap}>
+                <TouchableOpacity onPress={handleSecondaryPress} activeOpacity={0.8} style={styles.secondaryWrap}>
                   <View style={[styles.secondaryBtn, { borderColor: glassBorder, backgroundColor: cardBg }]}>
                     <Text style={[styles.secondaryBtnText, { color: textMain }]}>I already have an account</Text>
                   </View>
@@ -361,21 +435,15 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
 
-  // Background orbs
-  orb: { position: "absolute", borderRadius: 9999 },
-  orbA: { width: 360, height: 360, top: -120, left: -110, backgroundColor: "rgba(99,102,241,0.55)", opacity: 0.45 },
-  orbB: { width: 380, height: 380, bottom: -120, right: -120, backgroundColor: "rgba(139,92,246,0.5)", opacity: 0.4 },
-  orbC: { width: 300, height: 300, top: height * 0.38, right: -130, backgroundColor: "rgba(34,211,238,0.45)" },
-
   // Splash
-  ringOuter: { position: "absolute", width: 250, height: 250, borderRadius: 125, borderWidth: 1, alignSelf: "center", top: height / 2 - 130 },
-  ringInner: { position: "absolute", width: 320, height: 320, borderRadius: 160, borderWidth: 1, alignSelf: "center", top: height / 2 - 165 },
-  splashCenter: { flex: 1, justifyContent: "center", alignItems: "center", gap: 14 },
-  splashIcon: {
-    width: 116, height: 116, borderRadius: 32, borderWidth: 1, overflow: "hidden",
-    justifyContent: "center", alignItems: "center", marginBottom: 10,
+  splashCenter: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16 },
+  splashMark: { width: 180, height: 180, justifyContent: "center", alignItems: "center" },
+  splashIconWrap: {
+    position: "absolute", width: 96, height: 96, borderRadius: 26,
+    justifyContent: "center", alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)",
   },
-  splashName: { fontSize: 36, fontWeight: "800", letterSpacing: -1 },
+  splashName: { fontSize: 34, fontWeight: "800", letterSpacing: -1, marginTop: 6 },
   splashTagline: { fontSize: 14, fontWeight: "500", letterSpacing: 0.3 },
   dots: { flexDirection: "row", gap: 7, paddingBottom: 54, alignSelf: "center" },
   dot: { width: 7, height: 7, borderRadius: 4 },
@@ -386,60 +454,70 @@ const styles = StyleSheet.create({
 
   // Section 1 · Hero
   heroSection: {
-    minHeight: height * 0.78,
+    minHeight: height * 0.82,
     justifyContent: "center", alignItems: "center",
-    paddingHorizontal: 26, gap: 15, paddingTop: 10,
+    paddingHorizontal: 26, gap: 16, paddingTop: 10,
   },
-  heroIcon: {
-    width: 74, height: 74, borderRadius: 21, justifyContent: "center", alignItems: "center", marginBottom: 2,
-    shadowColor: "#6366F1", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 18, elevation: 10,
+  kickerPill: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 13, paddingVertical: 7, borderRadius: 100, borderWidth: 1,
   },
-  headline: { fontSize: 34, fontWeight: "800", textAlign: "center", letterSpacing: -1.2, lineHeight: 41 },
-  subCopy: { fontSize: 14.5, textAlign: "center", lineHeight: 21, fontWeight: "400", maxWidth: width * 0.78 },
+  kickerDot: { width: 6, height: 6, borderRadius: 3 },
+  kickerPillText: { fontSize: 12, fontWeight: "600", letterSpacing: 0.1 },
+
+  headline: { fontSize: 36, fontWeight: "800", textAlign: "center", letterSpacing: -1.3, lineHeight: 43 },
+  subCopy: { fontSize: 14.5, textAlign: "center", lineHeight: 21, fontWeight: "400", maxWidth: width * 0.8 },
 
   demoCard: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    width: "100%", borderRadius: 18, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 13, marginTop: 4,
+    width: "100%", borderRadius: 20, borderWidth: 1, padding: 16, marginTop: 6, gap: 14,
   },
-  demoLeft: { gap: 3 },
+  demoHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  demoIconWrap: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   demoTitle: { fontSize: 15, fontWeight: "800", letterSpacing: -0.3 },
-  demoMeta: { fontSize: 12, fontWeight: "500" },
-  demoAvatars: { flexDirection: "row", marginTop: 5, alignItems: "center" },
+  demoMeta: { fontSize: 11.5, fontWeight: "500", marginTop: 1 },
+  demoDivider: { height: 1, width: "100%" },
+  demoSharesRow: { flexDirection: "row", justifyContent: "space-between" },
+  demoShareCol: { alignItems: "center", gap: 6 },
   demoAvatar: {
-    width: 22, height: 22, borderRadius: 11, borderWidth: 1.5,
+    width: 30, height: 30, borderRadius: 15,
     justifyContent: "center", alignItems: "center",
   },
   demoAvatarMore: { backgroundColor: "#64748B" },
-  demoAvatarText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  demoAvatarText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+  demoShareAmt: { fontSize: 11, fontWeight: "700" },
   settledChip: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 11, paddingVertical: 7, borderRadius: 100,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 100,
   },
-  settledText: { fontSize: 12, fontWeight: "700", letterSpacing: 0.1 },
+  settledText: { fontSize: 11.5, fontWeight: "700", letterSpacing: 0.1 },
 
   heroCta: { width: "100%", marginTop: 6 },
-  scrollHint: { alignItems: "center", gap: 2, marginTop: 14 },
+  scrollHint: { alignItems: "center", gap: 2, marginTop: 8 },
   scrollHintText: { fontSize: 12, fontWeight: "600", letterSpacing: 0.3 },
 
   // Shared section chrome
   section: { paddingHorizontal: 24, paddingTop: 44, alignItems: "center" },
   sectionKicker: { fontSize: 11.5, fontWeight: "800", letterSpacing: 2 },
   sectionTitle: { fontSize: 26, fontWeight: "800", letterSpacing: -0.8, textAlign: "center", marginTop: 8 },
-  sectionSub: { fontSize: 14, textAlign: "center", lineHeight: 20, marginTop: 8, maxWidth: width * 0.8 },
 
   // Section 2 · Features
   featureGrid: {
-    flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 24, justifyContent: "center",
+    flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 22, width: "100%",
   },
   featureCard: {
     width: (width - 24 * 2 - 12) / 2,
-    borderRadius: 20, borderWidth: 1, padding: 16, gap: 8,
+    minHeight: 158,
+    borderRadius: 20, borderWidth: 1, padding: 17, gap: 10,
   },
   featureIconWrap: {
-    width: 40, height: 40, borderRadius: 13, justifyContent: "center", alignItems: "center",
+    width: 44, height: 44, borderRadius: 14, justifyContent: "center", alignItems: "center",
   },
-  featureTitle: { fontSize: 14.5, fontWeight: "800", letterSpacing: -0.2 },
-  featureDesc: { fontSize: 12, lineHeight: 17, fontWeight: "400" },
+  featureTitle: { fontSize: 15, fontWeight: "800", letterSpacing: -0.2 },
+  featureDesc: { fontSize: 12.5, lineHeight: 18, fontWeight: "400" },
+
+  finalIconWrap: {
+    width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center",
+  },
 
   // Section 3 · Steps
   steps: { width: "100%", marginTop: 26, gap: 0 },
@@ -474,6 +552,7 @@ const styles = StyleSheet.create({
     shadowColor: "#6366F1", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 10,
   },
   primaryBtn: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  btnSheen: { position: "absolute", top: 0, left: 0, right: 0, height: "55%" },
   primaryBtnText: { color: "#fff", fontSize: 16.5, fontWeight: "800", letterSpacing: 0.2 },
   secondaryWrap: { width: "100%", borderRadius: 16, overflow: "hidden" },
   secondaryBtn: { height: 54, borderWidth: 1, borderRadius: 16, alignItems: "center", justifyContent: "center" },
