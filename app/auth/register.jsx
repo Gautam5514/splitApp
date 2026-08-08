@@ -120,7 +120,15 @@ export default function RegisterScreen() {
           {/* Back */}
           <Animated.View entering={FadeInDown.duration(400)}>
             <TouchableOpacity
-              onPress={() => (step === "form" ? setStep("start") : router.back())}
+              onPress={() => {
+                if (step === "form") {
+                  setStep("start");
+                } else if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/auth/login");
+                }
+              }}
               style={[styles.backBtn, { backgroundColor: surface, borderColor: borderDefault }]}
               activeOpacity={0.7}
             >
