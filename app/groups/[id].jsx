@@ -99,8 +99,13 @@ export default function GroupDetailPage() {
             setLoading(true);
             const res = await api.get(`/groups/${groupId}`);
             setGroup(res.data);
-        } catch {
-            console.error("Failed to load group details");
+        } catch (e) {
+            console.error(
+                "Failed to load group details:",
+                groupId,
+                e?.response?.status,
+                e?.response?.data || e?.message
+            );
         } finally {
             setLoading(false);
         }
