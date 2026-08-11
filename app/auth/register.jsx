@@ -64,8 +64,8 @@ export default function RegisterScreen() {
       await updateProfile(res.user, { displayName: name });
       const firebaseToken = await res.user.getIdToken();
       try {
-        const backend = await api.post("/auth/google", { token: firebaseToken });
-        await saveToken(backend.data.token);
+        await api.post("/auth/google", { token: firebaseToken });
+        await saveToken(firebaseToken);
         router.replace("/(tabs)/home");
       } catch {
         Alert.alert("Warning", "Account created, but failed to connect to backend.");
@@ -92,8 +92,8 @@ export default function RegisterScreen() {
       if (!result?.user) return;
       const firebaseToken = await result.user.getIdToken();
       try {
-        const backend = await api.post("/auth/google", { token: firebaseToken });
-        await saveToken(backend.data.token);
+        await api.post("/auth/google", { token: firebaseToken });
+        await saveToken(firebaseToken);
         router.replace("/(tabs)/home");
       } catch {
         Alert.alert("Warning", "Google auth succeeded but failed to connect to backend.");

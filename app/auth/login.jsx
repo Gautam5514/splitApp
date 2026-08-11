@@ -131,8 +131,8 @@ export default function LoginScreen() {
       const result = await signInWithEmailAndPassword(auth, email.trim(), password);
       const idToken = await result.user.getIdToken();
       const referralCode = await getStoredReferralCode();
-      const backend = await api.post("/auth/google", { token: idToken, referralCode });
-      await saveToken(backend.data.token);
+      await api.post("/auth/google", { token: idToken, referralCode });
+      await saveToken(idToken);
       router.replace("/(tabs)/home");
     } catch (e) {
       Alert.alert(
@@ -172,8 +172,8 @@ export default function LoginScreen() {
       const firebaseToken = await result.user.getIdToken();
       const referralCode = await getStoredReferralCode();
       try {
-        const backend = await api.post("/auth/google", { token: firebaseToken, referralCode });
-        await saveToken(backend.data.token);
+        await api.post("/auth/google", { token: firebaseToken, referralCode });
+        await saveToken(firebaseToken);
         router.replace("/(tabs)/home");
       } catch {
         Alert.alert("Warning", "Google sign-in succeeded but failed to connect to backend.");
