@@ -37,6 +37,7 @@ import {
 import { useEffect, useState } from "react";
 import {
     Alert,
+    FlatList,
     Image,
     Modal,
     ScrollView,
@@ -67,6 +68,7 @@ export default function GroupDetailPage() {
 
     const [group, setGroup] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
     const [adding, setAdding] = useState(false);
     const [expenses, setExpenses] = useState([]);
     const [balances, setBalances] = useState(null);
@@ -99,6 +101,7 @@ export default function GroupDetailPage() {
             setLoading(true);
             const res = await api.get(`/groups/${groupId}`);
             setGroup(res.data);
+            setLoadError(null);
         } catch (e) {
             console.error(
                 "Failed to load group details:",
@@ -106,6 +109,7 @@ export default function GroupDetailPage() {
                 e?.response?.status,
                 e?.response?.data || e?.message
             );
+            setLoadError(e?.response?.status === 404 ? "notfound" : "network");
         } finally {
             setLoading(false);
         }
@@ -146,6 +150,13 @@ export default function GroupDetailPage() {
             fetchBalances();
         }
     }, [groupId]);
+
+    const retryLoad = () => {
+        fetchMe();
+        fetchGroup();
+        fetchExpenses();
+        fetchBalances();
+    };
 
     const handleAddMembers = async (emails) => {
         if (!emails?.length) return;
@@ -247,10 +258,20 @@ export default function GroupDetailPage() {
     }
 
     if (!group) {
+        const isNetworkError = loadError === "network";
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>Group not found.</Text>
+                    <Text style={styles.errorText}>
+                        {isNetworkError
+                            ? "Couldn't reach the server. Check your connection and try again."
+                            : "Group not found."}
+                    </Text>
+                    {isNetworkError && (
+                        <TouchableOpacity onPress={retryLoad} style={styles.backButton}>
+                            <Text style={styles.backButtonText}>Try Again</Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity onPress={goBack} style={styles.backButton}>
                         <ArrowLeftCircle size={14} color={colors.primary} />
                         <Text style={styles.backButtonText}>Back</Text>
@@ -544,57 +565,59 @@ export default function GroupDetailPage() {
                         </View>
 
                         {/* Expense List */}
-                        <ScrollView
+                        <FlatList
                             style={styles.modalScroll}
+                            data={selectedMember?.memberExpenses || []}
+                            keyExtractor={(exp) => exp._id}
                             showsVerticalScrollIndicator={false}
-                        >
-                            {selectedMember?.memberExpenses.length === 0 ? (
+                            initialNumToRender={12}
+                            windowSize={9}
+                            removeClippedSubviews
+                            ListEmptyComponent={
                                 <View style={styles.modalEmpty}>
                                     <Receipt size={22} color={colors.primary} />
                                     <Text style={styles.emptyText}>No expenses from this member.</Text>
                                 </View>
-                            ) : (
-                                <View style={styles.expensesList}>
-                                    {selectedMember?.memberExpenses.map((exp) => {
-                                        const key = exp.category?.toLowerCase() || "misc";
-                                        const Icon = categoryIcons[key] || FileText;
-                                        return (
-                                            <View key={exp._id} style={styles.expenseCard}>
-                                                <View style={styles.expenseLeft}>
-                                                    <View style={styles.expenseIcon}>
-                                                        <Icon size={18} color={colors.primary} />
-                                                    </View>
-                                                    <View style={styles.expenseDetails}>
-                                                        <Text style={styles.expenseDescription} numberOfLines={1}>
-                                                            {exp.description}
-                                                        </Text>
-                                                        <Text style={styles.expenseInfo} numberOfLines={1}>
-                                                            ₹{exp.amount}
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                                <View style={styles.expenseRight}>
-                                                    <View style={styles.categoryBadge}>
-                                                        <Text style={styles.categoryBadgeText}>{exp.category}</Text>
-                                                    </View>
-                                                    {exp.ocrText && (
-                                                        <TouchableOpacity
-                                                            onPress={() => {
-                                                                setSelectedOcr(exp);
-                                                                setShowOcrModal(true);
-                                                            }}
-                                                            style={styles.ocrButton}
-                                                        >
-                                                            <Eye size={18} color={colors.textSecondary} />
-                                                        </TouchableOpacity>
-                                                    )}
-                                                </View>
+                            }
+                            contentContainerStyle={styles.expensesList}
+                            renderItem={({ item: exp }) => {
+                                const key = exp.category?.toLowerCase() || "misc";
+                                const Icon = categoryIcons[key] || FileText;
+                                return (
+                                    <View style={styles.expenseCard}>
+                                        <View style={styles.expenseLeft}>
+                                            <View style={styles.expenseIcon}>
+                                                <Icon size={18} color={colors.primary} />
                                             </View>
-                                        );
-                                    })}
-                                </View>
-                            )}
-                        </ScrollView>
+                                            <View style={styles.expenseDetails}>
+                                                <Text style={styles.expenseDescription} numberOfLines={1}>
+                                                    {exp.description}
+                                                </Text>
+                                                <Text style={styles.expenseInfo} numberOfLines={1}>
+                                                    ₹{exp.amount}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.expenseRight}>
+                                            <View style={styles.categoryBadge}>
+                                                <Text style={styles.categoryBadgeText}>{exp.category}</Text>
+                                            </View>
+                                            {exp.ocrText && (
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setSelectedOcr(exp);
+                                                        setShowOcrModal(true);
+                                                    }}
+                                                    style={styles.ocrButton}
+                                                >
+                                                    <Eye size={18} color={colors.textSecondary} />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                );
+                            }}
+                        />
                     </View>
                 </View>
             </Modal>

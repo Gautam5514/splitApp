@@ -5,11 +5,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ArrowLeft, Bot, Send, Sparkles } from "lucide-react-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+    FlatList,
     KeyboardAvoidingView,
     Platform,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -31,7 +31,7 @@ export default function AiChatScreen() {
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(false);
     const [provider, setProvider] = useState("gemini");
-    const scrollViewRef = useRef(null);
+    const listRef = useRef(null);
 
     const styles = getStyles(colors);
 
@@ -93,9 +93,14 @@ export default function AiChatScreen() {
 
     useEffect(() => {
         setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
+            listRef.current?.scrollToEnd({ animated: true });
         }, 100);
     }, [messages, loading]);
+
+    const renderMessage = useCallback(
+        ({ item }) => <ChatMessage message={item} colors={colors} styles={styles} />,
+        [colors, styles]
+    );
 
     return (
         <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -136,20 +141,22 @@ export default function AiChatScreen() {
                 style={{ flex: 1 }}
             >
                 <View style={styles.chatContainer}>
-                    <ScrollView
-                        ref={scrollViewRef}
+                    <FlatList
+                        ref={listRef}
+                        data={messages}
+                        keyExtractor={(_, i) => String(i)}
+                        renderItem={renderMessage}
                         contentContainerStyle={styles.messagesContent}
                         showsVerticalScrollIndicator={false}
-                    >
-                        {messages.length === 0 ? (
+                        keyboardShouldPersistTaps="handled"
+                        initialNumToRender={15}
+                        windowSize={11}
+                        removeClippedSubviews
+                        ListEmptyComponent={
                             <EmptyState onSuggestionClick={handleSuggestionClick} colors={colors} styles={styles} />
-                        ) : (
-                            messages.map((m, i) => (
-                                <ChatMessage key={i} message={m} colors={colors} styles={styles} />
-                            ))
-                        )}
-                        {loading && <ThinkingIndicator colors={colors} styles={styles} />}
-                    </ScrollView>
+                        }
+                        ListFooterComponent={loading ? <ThinkingIndicator colors={colors} styles={styles} /> : null}
+                    />
 
                     {/* Input Area */}
                     <View style={styles.inputWrapper}>

@@ -9,11 +9,11 @@ import {
     UsersRound,
     X,
 } from "lucide-react-native";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
+    FlatList,
     Modal,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -49,18 +49,46 @@ export default function NotificationBell({ iconColor }) {
 
     const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-    const handlePress = (n) => {
-        setOpen(false);
-        markOneAsRead(n._id);
-        const link = n.link || "";
-        if (link.startsWith("/groups/")) {
-            router.push(link);
-        } else if (link && link !== "/dashboard") {
-            router.push(link);
-        } else {
-            router.push("/(tabs)/home");
-        }
-    };
+    const handlePress = useCallback(
+        (n) => {
+            setOpen(false);
+            markOneAsRead(n._id);
+            const link = n.link || "";
+            if (link.startsWith("/groups/")) {
+                router.push(link);
+            } else if (link && link !== "/dashboard") {
+                router.push(link);
+            } else {
+                router.push("/(tabs)/home");
+            }
+        },
+        [markOneAsRead]
+    );
+
+    const renderNotification = useCallback(
+        ({ item: n }) => {
+            const { Icon, color } = metaFor(n.type, colors);
+            return (
+                <TouchableOpacity
+                    style={styles.item}
+                    onPress={() => handlePress(n)}
+                    activeOpacity={0.7}
+                >
+                    <View style={[styles.itemIcon, { backgroundColor: color + "1A" }]}>
+                        <Icon size={16} color={color} />
+                    </View>
+                    <View style={styles.itemBody}>
+                        <Text style={styles.itemMessage} numberOfLines={2}>
+                            {n.message}
+                        </Text>
+                        <Text style={styles.itemTime}>{timeAgo(n.createdAt)}</Text>
+                    </View>
+                    {!n.isRead && <View style={styles.unreadDot} />}
+                </TouchableOpacity>
+            );
+        },
+        [colors, styles, handlePress]
+    );
 
     return (
         <>
@@ -118,40 +146,16 @@ export default function NotificationBell({ iconColor }) {
                                 <Text style={styles.emptyText}>You{"'"}re all caught up</Text>
                             </View>
                         ) : (
-                            <ScrollView
+                            <FlatList
                                 style={styles.list}
+                                data={notifications}
+                                keyExtractor={(n, i) => n._id || String(i)}
+                                renderItem={renderNotification}
                                 showsVerticalScrollIndicator={false}
-                            >
-                                {notifications.map((n, i) => {
-                                    const { Icon, color } = metaFor(n.type, colors);
-                                    return (
-                                        <TouchableOpacity
-                                            key={n._id || i}
-                                            style={styles.item}
-                                            onPress={() => handlePress(n)}
-                                            activeOpacity={0.7}
-                                        >
-                                            <View
-                                                style={[
-                                                    styles.itemIcon,
-                                                    { backgroundColor: color + "1A" },
-                                                ]}
-                                            >
-                                                <Icon size={16} color={color} />
-                                            </View>
-                                            <View style={styles.itemBody}>
-                                                <Text style={styles.itemMessage} numberOfLines={2}>
-                                                    {n.message}
-                                                </Text>
-                                                <Text style={styles.itemTime}>
-                                                    {timeAgo(n.createdAt)}
-                                                </Text>
-                                            </View>
-                                            {!n.isRead && <View style={styles.unreadDot} />}
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </ScrollView>
+                                initialNumToRender={10}
+                                windowSize={7}
+                                removeClippedSubviews
+                            />
                         )}
                     </Pressable>
                 </Pressable>

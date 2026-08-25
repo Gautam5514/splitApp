@@ -21,6 +21,7 @@ export default function AddExpenseModal({ group, onClose, onSuccess, initialDesc
     const [amount, setAmount] = useState("");
     const [category, setCategory] = useState(initialCategory);
     const [imageUri, setImageUri] = useState(null);
+    const [imageBase64, setImageBase64] = useState(null);
     const [loading, setLoading] = useState(false);
 
     const styles = getStyles(colors);
@@ -29,12 +30,19 @@ export default function AddExpenseModal({ group, onClose, onSuccess, initialDesc
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            quality: 0.8,
+            quality: 0.5,
             base64: true,
         });
 
         if (!result.canceled && result.assets[0]) {
-            setImageUri(result.assets[0].uri);
+            const asset = result.assets[0];
+            setImageUri(asset.uri);
+            // Use the base64 the native picker already produced instead of
+            // re-reading the file through fetch()/Blob/FileReader on the JS
+            // thread, which was blocking the UI (and any in-progress scroll)
+            // for the full duration of a multi-MB base64 re-encode.
+            const mime = asset.mimeType || "image/jpeg";
+            setImageBase64(`data:${mime};base64,${asset.base64}`);
         }
     };
 
@@ -51,19 +59,9 @@ export default function AddExpenseModal({ group, onClose, onSuccess, initialDesc
             setLoading(true);
             let fileUrl = null;
 
-            if (imageUri) {
-                const response = await fetch(imageUri);
-                const blob = await response.blob();
-                const reader = new FileReader();
-
-                const base64 = await new Promise((resolve, reject) => {
-                    reader.onloadend = () => resolve(reader.result);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
-
+            if (imageBase64) {
                 const uploadRes = await api.post("/upload", {
-                    file: base64,
+                    file: imageBase64,
                     folder: "splitwise_receipts",
                     resourceType: "auto",
                 });
