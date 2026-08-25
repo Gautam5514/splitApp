@@ -30,6 +30,14 @@
           }
         },
         {
+          "client_id": "803396684704-q9eujidgaq6pdhmjijk4v18nb1fai94d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kunal.splitapp",
+            "certificate_hash": "45cb48d940bbf4da0eec5084c3dc750c23806933"
+          }
+        },
+        {
           "client_id": "803396684704-3ilatdscisg178ouh81o0pere3s1v913.apps.googleusercontent.com",
           "client_type": 3
         }

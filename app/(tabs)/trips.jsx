@@ -14,7 +14,6 @@ import {
     Plane,
     Search,
     Plus,
-    Sparkles,
     Trash2,
     UserPlus,
     Users,
@@ -23,6 +22,8 @@ import {
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
     Alert,
+    FlatList,
+    Image,
     ScrollView,
     StyleSheet,
     Text,
@@ -196,18 +197,17 @@ export default function TripsPage() {
         completed: "Completed trips stay searchable here for later reference.",
     };
 
-    return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
+    const listHeader = (
+        <>
                 {/* Header Section */}
                 <View style={[styles.header, { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }]}>
                     <View style={[styles.headerTextContainer, { flex: 1 }]}>
                         <View style={styles.titleRow}>
-                            <Sparkles size={28} color={colors.primary} />
+                            <Image
+                                source={require("../../assets/images/logo-mark.png")}
+                                style={styles.titleLogo}
+                                resizeMode="contain"
+                            />
                             <Text style={styles.title}>SplitEase</Text>
                         </View>
                         <Text style={styles.subtitle}>
@@ -400,79 +400,69 @@ export default function TripsPage() {
                         <Loader size={48} />
                     </View>
                 )}
+        </>
+    );
 
-                {/* No Groups */}
-                {!loading && groups.length === 0 && (
-                    <View style={styles.emptyCard}>
-                        <Users size={38} color={colors.primary} />
-                        <Text style={styles.emptyTitle}>No groups yet</Text>
-                        <Text style={styles.emptyText}>
-                            Create your first group above and start splitting expenses.
-                        </Text>
-                        <Text style={styles.emptyQuote}>
-                            &quot;Good trips become great when expenses stay fair.&quot;
-                        </Text>
-                    </View>
-                )}
+    const listEmpty = () => {
+        if (loading) return null;
+        if (groups.length === 0) {
+            return (
+                <View style={styles.emptyCard}>
+                    <Users size={38} color={colors.primary} />
+                    <Text style={styles.emptyTitle}>No groups yet</Text>
+                    <Text style={styles.emptyText}>
+                        Create your first group above and start splitting expenses.
+                    </Text>
+                    <Text style={styles.emptyQuote}>
+                        &quot;Good trips become great when expenses stay fair.&quot;
+                    </Text>
+                </View>
+            );
+        }
+        return (
+            <View style={styles.emptyStateContainer}>
+                <Search size={30} color={colors.textSecondary} />
+                <Text style={styles.emptyStateTitle}>
+                    {emptyTitleForView[view]}
+                </Text>
+                <Text style={styles.emptyStateText}>
+                    {searchQuery
+                        ? "Try a different trip name or member name."
+                        : emptyTextForView[view]}
+                </Text>
+            </View>
+        );
+    };
 
-                {/* Trips */}
-                {!loading && groups.length > 0 && (
-                    <View style={styles.groupsContainer}>
-                        {/* {decoratedGroups.length > 0 ? (
-                            <View style={styles.summaryRow}>
-                                <View style={styles.summaryItem}>
-                                    <Crown size={16} color={colors.primary} />
-                                    <Text style={styles.summaryText}>
-                                        {filterTabs[1].count} mine
-                                    </Text>
-                                </View>
-                                <View style={styles.summaryItem}>
-                                    <UserPlus size={16} color="#7C3AED" />
-                                    <Text style={styles.summaryText}>
-                                        {filterTabs[2].count} shared
-                                    </Text>
-                                </View>
-                                <View style={styles.summaryItem}>
-                                    <CheckCircle size={16} color="#059669" />
-                                    <Text style={styles.summaryText}>
-                                        {filterTabs[3].count} done
-                                    </Text>
-                                </View>
-                            </View>
-                        ) : null} */}
+    const renderGroupCard = useCallback(({ item }) => (
+        <GroupCard
+            group={item}
+            onMarkCompleted={markCompleted}
+            onDeleteTrip={deleteTrip}
+            isCreator={item.isCreator}
+            view={view}
+            colors={colors}
+            styles={styles}
+            isGroupCompleted={isGroupCompleted}
+        />
+    ), [markCompleted, deleteTrip, view, colors, styles]);
 
-                        {decoratedGroups.length > 0 ? (
-                            <View style={styles.section}>
-                                {decoratedGroups.map((g) => (
-                                    <GroupCard
-                                        key={g._id}
-                                        group={g}
-                                        onMarkCompleted={markCompleted}
-                                        onDeleteTrip={deleteTrip}
-                                        isCreator={g.isCreator}
-                                        view={view}
-                                        colors={colors}
-                                        styles={styles}
-                                        isGroupCompleted={isGroupCompleted}
-                                    />
-                                ))}
-                            </View>
-                        ) : (
-                            <View style={styles.emptyStateContainer}>
-                                <Search size={30} color={colors.textSecondary} />
-                                <Text style={styles.emptyStateTitle}>
-                                    {emptyTitleForView[view]}
-                                </Text>
-                                <Text style={styles.emptyStateText}>
-                                    {searchQuery
-                                        ? "Try a different trip name or member name."
-                                        : emptyTextForView[view]}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                )}
-            </ScrollView>
+    return (
+        <SafeAreaView style={styles.container}>
+            <FlatList
+                data={loading ? [] : decoratedGroups}
+                keyExtractor={(g) => g._id}
+                renderItem={renderGroupCard}
+                ListHeaderComponent={listHeader}
+                ListEmptyComponent={listEmpty}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                initialNumToRender={8}
+                windowSize={7}
+                maxToRenderPerBatch={8}
+                removeClippedSubviews
+                keyboardShouldPersistTaps="handled"
+            />
 
             {/* Invite Modal */}
             <InviteModal
@@ -708,6 +698,10 @@ const getStyles = (colors) => StyleSheet.create({
         alignItems: "center",
         gap: 8,
         marginBottom: 4,
+    },
+    titleLogo: {
+        width: 35,
+        height: 28,
     },
     title: {
         fontSize: 28,
