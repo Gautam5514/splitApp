@@ -3,6 +3,7 @@ import { Loader } from "@/components/Loader";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
+import { promptAddBalanceWidget } from "@/lib/homeScreenWidget";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
@@ -15,6 +16,7 @@ import {
     LogOut,
     Mail,
     Moon,
+    PanelsTopLeft,
     ShieldCheck,
     Sparkles,
     Tag,
@@ -26,6 +28,7 @@ import { useEffect, useState } from "react";
 import {
     Alert,
     ScrollView,
+    Platform,
     StyleSheet,
     Switch,
     Text,
@@ -131,6 +134,17 @@ export default function SettingsScreen() {
         ]);
     };
 
+    const addHomeWidget = async () => {
+        try {
+            const supported = await promptAddBalanceWidget();
+            if (!supported) {
+                Alert.alert("Widget picker", "Press and hold your home screen, choose Widgets, then select SplitEase Balance.");
+            }
+        } catch {
+            Alert.alert("Widget unavailable", "Install a new Android app build first, then try again. Home-screen widgets are not available in Expo Go.");
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
             <View style={styles.header}>
@@ -181,6 +195,22 @@ export default function SettingsScreen() {
                         />
                     </View>
                 </View>
+
+                {Platform.OS === "android" && (
+                    <>
+                        <Text style={styles.sectionLabel}>Home Screen</Text>
+                        <View style={styles.card}>
+                            <Row
+                                icon={<PanelsTopLeft size={18} color={colors.primary} />}
+                                label="Add balance widget"
+                                value="See balances at a glance"
+                                onPress={addHomeWidget}
+                                chevron
+                                styles={styles}
+                            />
+                        </View>
+                    </>
+                )}
 
                 {/* Discover */}
                 <Text style={styles.sectionLabel}>Discover</Text>
