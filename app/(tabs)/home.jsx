@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
+import { syncBalanceWidget } from "@/lib/homeScreenWidget";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import {
@@ -137,7 +138,11 @@ export default function Dashboard() {
 
                 const uid = me?._id || me?.id || null;
                 setMeId(uid);
-                computeOwe(allGroups, uid).then((sum) => !cancelled && setOweSummary(sum));
+                computeOwe(allGroups, uid).then((sum) => {
+                    if (cancelled) return;
+                    setOweSummary(sum);
+                    syncBalanceWidget(sum);
+                });
             } catch {
                 // keep cache
             } finally {
@@ -185,7 +190,9 @@ export default function Dashboard() {
             setGroups(allGroups);
             AsyncStorage.setItem("groups_cache_v1", JSON.stringify(allGroups));
             const uid = meRes.data?._id || meRes.data?.id || meId;
-            setOweSummary(await computeOwe(allGroups, uid));
+            const summary = await computeOwe(allGroups, uid);
+            setOweSummary(summary);
+            syncBalanceWidget(summary);
         } catch {
             // ignore
         }
