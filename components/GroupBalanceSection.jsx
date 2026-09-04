@@ -3,24 +3,57 @@ import {
     ArrowDownCircle,
     ArrowUpCircle,
     CheckCircle2,
+    Clock,
     Coins,
     SmilePlus,
     Wallet2,
     Zap,
 } from "lucide-react-native";
 import { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-export default function GroupBalanceSection({ balances, meId, onSettle }) {
+export default function GroupBalanceSection({
+    balances,
+    pendingSettlements,
+    meId,
+    onRequestSettlement,
+    onConfirmSettlement,
+    onRejectSettlement,
+    onCancelSettlement,
+}) {
     const { colors } = useTheme();
     const styles = getStyles(colors);
 
-    // Holds the suggestion index awaiting creditor confirmation
-    const [pendingConfirm, setPendingConfirm] = useState(null);
+    // Holds the suggestion index whose payment-method picker is open
+    const [activeForm, setActiveForm] = useState(null);
+    const [method, setMethod] = useState("cash");
+    const [note, setNote] = useState("");
+    const [submitting, setSubmitting] = useState(false);
 
     const hasBalances = balances?.balances?.length > 0;
     const hasSuggestions = balances?.suggestions?.length > 0;
-    const canSettle = typeof onSettle === "function";
+    const canSettle = typeof onRequestSettlement === "function";
+
+    const findPendingFor = (s) =>
+        pendingSettlements?.find(
+            (r) =>
+                String(r.fromUserId._id) === String(s.from.userId) &&
+                String(r.toUserId._id) === String(s.to.userId)
+        );
+
+    const openForm = (i) => {
+        setActiveForm(i);
+        setMethod("cash");
+        setNote("");
+    };
+    const closeForm = () => setActiveForm(null);
+
+    const submitRequest = async (s) => {
+        setSubmitting(true);
+        await onRequestSettlement(s.from, s.to, s.amount, method, note.trim());
+        setSubmitting(false);
+        closeForm();
+    };
 
     return (
         <View style={styles.container}>
@@ -106,7 +139,8 @@ export default function GroupBalanceSection({ balances, meId, onSettle }) {
                                 meId != null && String(s.from.userId) === String(meId);
                             const isCreditor =
                                 meId != null && String(s.to.userId) === String(meId);
-                            const isAwaiting = pendingConfirm === i;
+                            const pending = findPendingFor(s);
+                            const isFormOpen = activeForm === i;
                             const amt = Number(s.amount).toFixed(0);
 
                             return (
@@ -123,74 +157,105 @@ export default function GroupBalanceSection({ balances, meId, onSettle }) {
                                         </Text>
                                     </Text>
 
-                                    {/* Debtor — direct "I've Paid" */}
-                                    {canSettle && isDebtor && (
+                                    {pending ? (
+                                        <PendingSettlementRow
+                                            pending={pending}
+                                            meId={meId}
+                                            colors={colors}
+                                            styles={styles}
+                                            onConfirm={onConfirmSettlement}
+                                            onReject={onRejectSettlement}
+                                            onCancel={onCancelSettlement}
+                                        />
+                                    ) : isFormOpen ? (
+                                        <View style={styles.confirmBox}>
+                                            <Text style={styles.confirmQuestion}>
+                                                How did you {isDebtor ? "pay" : "receive"}?
+                                            </Text>
+                                            <View style={styles.methodRow}>
+                                                {[
+                                                    { key: "cash", label: "Cash" },
+                                                    { key: "online", label: "Online" },
+                                                ].map((m) => (
+                                                    <TouchableOpacity
+                                                        key={m.key}
+                                                        activeOpacity={0.85}
+                                                        style={[
+                                                            styles.methodBtn,
+                                                            method === m.key && styles.methodBtnActive,
+                                                        ]}
+                                                        onPress={() => setMethod(m.key)}
+                                                    >
+                                                        <Text
+                                                            style={[
+                                                                styles.methodBtnText,
+                                                                method === m.key && styles.methodBtnTextActive,
+                                                            ]}
+                                                        >
+                                                            {m.label}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                            <TextInput
+                                                style={styles.noteInput}
+                                                value={note}
+                                                onChangeText={setNote}
+                                                maxLength={200}
+                                                placeholder="Add a note (optional) — e.g. UPI ref no."
+                                                placeholderTextColor={colors.textSecondary}
+                                            />
+                                            <View style={styles.confirmActions}>
+                                                <TouchableOpacity
+                                                    activeOpacity={0.85}
+                                                    disabled={submitting}
+                                                    style={[
+                                                        styles.confirmChoice,
+                                                        styles.confirmYes,
+                                                        submitting && styles.btnDisabled,
+                                                    ]}
+                                                    onPress={() => submitRequest(s)}
+                                                >
+                                                    <Text style={styles.confirmYesText}>
+                                                        {submitting ? "Sending…" : "Send Request"}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    activeOpacity={0.85}
+                                                    style={[styles.confirmChoice, styles.confirmNo]}
+                                                    onPress={closeForm}
+                                                >
+                                                    <Text style={styles.confirmNoText}>Cancel</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    ) : canSettle && isDebtor ? (
                                         <TouchableOpacity
                                             activeOpacity={0.85}
                                             style={[styles.actionBtn, styles.payBtn]}
-                                            onPress={() => onSettle(s.from, s.to, s.amount)}
+                                            onPress={() => openForm(i)}
                                         >
                                             <CheckCircle2 size={14} color={colors.success} />
                                             <Text style={styles.payBtnText}>
                                                 I&apos;ve Paid ₹{amt}
                                             </Text>
                                         </TouchableOpacity>
-                                    )}
-
-                                    {/* Creditor — confirm received */}
-                                    {canSettle && isCreditor && !isAwaiting && (
+                                    ) : canSettle && isCreditor ? (
                                         <TouchableOpacity
                                             activeOpacity={0.85}
                                             style={[styles.actionBtn, styles.confirmBtn]}
-                                            onPress={() => setPendingConfirm(i)}
+                                            onPress={() => openForm(i)}
                                         >
                                             <CheckCircle2 size={14} color={colors.warning} />
                                             <Text style={styles.confirmBtnText}>
-                                                Confirm Payment Received
+                                                Mark ₹{amt} as Received
                                             </Text>
                                         </TouchableOpacity>
-                                    )}
-
-                                    {/* Creditor — inline confirmation */}
-                                    {canSettle && isCreditor && isAwaiting && (
-                                        <View style={styles.confirmBox}>
-                                            <Text style={styles.confirmQuestion}>
-                                                Has {s.from.name} actually paid you ₹{amt}?
-                                            </Text>
-                                            <View style={styles.confirmActions}>
-                                                <TouchableOpacity
-                                                    activeOpacity={0.85}
-                                                    style={[styles.confirmChoice, styles.confirmYes]}
-                                                    onPress={() => {
-                                                        setPendingConfirm(null);
-                                                        onSettle(s.from, s.to, s.amount);
-                                                    }}
-                                                >
-                                                    <Text style={styles.confirmYesText}>
-                                                        Yes, Confirm
-                                                    </Text>
-                                                </TouchableOpacity>
-                                                <TouchableOpacity
-                                                    activeOpacity={0.85}
-                                                    style={[styles.confirmChoice, styles.confirmNo]}
-                                                    onPress={() => setPendingConfirm(null)}
-                                                >
-                                                    <Text style={styles.confirmNoText}>
-                                                        No, Cancel
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            </View>
-                                        </View>
-                                    )}
-
-                                    {/* Third party — info only */}
-                                    {canSettle && !isDebtor && !isCreditor && (
+                                    ) : canSettle ? (
                                         <Text style={styles.thirdPartyNote}>
                                             Only the people involved can record this settlement
                                         </Text>
-                                    )}
-
-                                    {!canSettle && (
+                                    ) : (
                                         <Text style={styles.suggestionNumber}>
                                             Suggestion #{i + 1}
                                         </Text>
@@ -201,6 +266,65 @@ export default function GroupBalanceSection({ balances, meId, onSettle }) {
                     </View>
                 </View>
             )}
+        </View>
+    );
+}
+
+// A pending settlement claim on a suggestion row: either "waiting on the
+// other party" (if I initiated it) or "confirm/reject" (if I need to act).
+function PendingSettlementRow({ pending, meId, colors, styles, onConfirm, onReject, onCancel }) {
+    const isInitiator = String(pending.initiatedBy._id) === String(meId);
+    const initiatorPaid = String(pending.initiatedBy._id) === String(pending.fromUserId._id);
+    const counterpartyName = initiatorPaid ? pending.toUserId.name : pending.fromUserId.name;
+    const methodLabel = pending.method === "online" ? "via online transfer" : "in cash";
+
+    if (isInitiator) {
+        return (
+            <View style={styles.pendingBox}>
+                <View style={styles.pendingWaitRow}>
+                    <Clock size={12} color={colors.warning} />
+                    <Text style={styles.pendingWaitText}>
+                        Waiting for {counterpartyName} to confirm
+                    </Text>
+                </View>
+                <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[styles.confirmChoice, styles.confirmNo]}
+                    onPress={() => onCancel(pending._id)}
+                >
+                    <Text style={styles.confirmNoText}>Cancel Request</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.pendingBox}>
+            <Text style={styles.pendingAskText}>
+                <Text style={styles.pendingAskBold}>{pending.initiatedBy.name}</Text> says{" "}
+                {initiatorPaid ? "they paid you" : "they received"}{" "}
+                <Text style={styles.pendingAskBold}>₹{Number(pending.amount).toFixed(0)}</Text>{" "}
+                {methodLabel}. Confirm?
+            </Text>
+            {!!pending.note && (
+                <Text style={styles.pendingNote}>&ldquo;{pending.note}&rdquo;</Text>
+            )}
+            <View style={styles.confirmActions}>
+                <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[styles.confirmChoice, styles.confirmYes]}
+                    onPress={() => onConfirm(pending._id)}
+                >
+                    <Text style={styles.confirmYesText}>Yes, Confirm</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[styles.confirmChoice, styles.confirmNo]}
+                    onPress={() => onReject(pending._id)}
+                >
+                    <Text style={styles.confirmNoText}>Not Yet</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
@@ -407,6 +531,75 @@ const getStyles = (colors) => StyleSheet.create({
     confirmNoText: {
         fontSize: 12,
         fontWeight: "600",
+        color: colors.textSecondary,
+    },
+    btnDisabled: {
+        opacity: 0.6,
+    },
+    methodRow: {
+        flexDirection: "row",
+        gap: 8,
+    },
+    methodBtn: {
+        flex: 1,
+        paddingVertical: 9,
+        borderRadius: 8,
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    methodBtnActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    methodBtnText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: colors.textSecondary,
+    },
+    methodBtnTextActive: {
+        color: "#FFFFFF",
+    },
+    noteInput: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        fontSize: 12,
+        color: colors.text,
+        backgroundColor: colors.card,
+    },
+    pendingBox: {
+        borderWidth: 1,
+        borderColor: colors.warning,
+        backgroundColor: "rgba(245,158,11,0.10)",
+        borderRadius: 10,
+        padding: 12,
+        gap: 10,
+    },
+    pendingWaitRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+    },
+    pendingWaitText: {
+        fontSize: 11,
+        fontWeight: "500",
+        color: colors.warning,
+        flexShrink: 1,
+    },
+    pendingAskText: {
+        fontSize: 12,
+        color: colors.text,
+        lineHeight: 18,
+    },
+    pendingAskBold: {
+        fontWeight: "700",
+    },
+    pendingNote: {
+        fontSize: 11,
+        fontStyle: "italic",
         color: colors.textSecondary,
     },
     thirdPartyNote: {

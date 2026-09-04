@@ -7,6 +7,7 @@ import NotepadSection from "@/components/Notepad/NotepadSection";
 import OcrViewModal from "@/components/OcrViewModal";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
+import socket, { connectSocket } from "@/lib/socket";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -72,6 +73,7 @@ export default function GroupDetailPage() {
     const [adding, setAdding] = useState(false);
     const [expenses, setExpenses] = useState([]);
     const [balances, setBalances] = useState(null);
+    const [pendingSettlements, setPendingSettlements] = useState([]);
     const [showExpenseModal, setShowExpenseModal] = useState(false);
     const [showOcrModal, setShowOcrModal] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
@@ -142,13 +144,43 @@ export default function GroupDetailPage() {
         }
     };
 
+    const fetchPendingSettlements = async () => {
+        try {
+            const res = await api.get(`/expenses/settle/pending/${groupId}`);
+            setPendingSettlements(res.data || []);
+        } catch {
+            // Non-critical - the Smart Settlements list still works without this.
+        }
+    };
+
     useEffect(() => {
         if (groupId) {
             fetchMe();
             fetchGroup();
             fetchExpenses();
             fetchBalances();
+            fetchPendingSettlements();
         }
+    }, [groupId]);
+
+    // Live refresh: any confirm/reject/cancel from the other party (or from
+    // this user on another device) pushes a "settlementUpdate" event to
+    // everyone viewing this group, so balances/pending never go stale.
+    useEffect(() => {
+        if (!groupId) return;
+        connectSocket();
+        socket.emit("joinGroup", groupId);
+        const onSettlementUpdate = (payload) => {
+            if (String(payload?.groupId) !== String(groupId)) return;
+            fetchBalances();
+            fetchExpenses();
+            fetchPendingSettlements();
+        };
+        socket.on("settlementUpdate", onSettlementUpdate);
+        return () => {
+            socket.off("settlementUpdate", onSettlementUpdate);
+            socket.emit("leaveGroup", groupId);
+        };
     }, [groupId]);
 
     const retryLoad = () => {
@@ -156,6 +188,7 @@ export default function GroupDetailPage() {
         fetchGroup();
         fetchExpenses();
         fetchBalances();
+        fetchPendingSettlements();
     };
 
     const handleAddMembers = async (emails) => {
@@ -186,24 +219,63 @@ export default function GroupDetailPage() {
         fetchBalances();
     };
 
-    const handleRecordSettlement = async (fromUser, toUser, amount) => {
+    // Settlements are two-party: this only files a claim. It never moves a
+    // balance by itself - only the counterparty's confirm does (see
+    // handleConfirmSettlement below). Prevents either side from unilaterally
+    // marking a debt paid.
+    const handleRequestSettlement = async (fromUser, toUser, amount, method, note) => {
         try {
-            await api.post("/expenses/settle", {
+            await api.post("/expenses/settle/request", {
                 groupId,
                 fromUserId: fromUser.userId,
                 toUserId: toUser.userId,
                 amount: Number(amount),
+                method,
+                note,
             });
-            Alert.alert(
-                "Settlement recorded",
-                `₹${Number(amount).toFixed(0)} settled. Balances updated.`
-            );
-            fetchExpenses();
-            fetchBalances();
+            fetchPendingSettlements();
         } catch (e) {
             Alert.alert(
-                "Couldn't settle",
-                e?.response?.data?.message || "Failed to record settlement."
+                "Couldn't send request",
+                e?.response?.data?.message || "Failed to send settlement request."
+            );
+        }
+    };
+
+    const handleConfirmSettlement = async (requestId) => {
+        try {
+            await api.post(`/expenses/settle/${requestId}/confirm`);
+            fetchExpenses();
+            fetchBalances();
+            fetchPendingSettlements();
+        } catch (e) {
+            Alert.alert(
+                "Couldn't confirm",
+                e?.response?.data?.message || "Failed to confirm settlement."
+            );
+        }
+    };
+
+    const handleRejectSettlement = async (requestId) => {
+        try {
+            await api.post(`/expenses/settle/${requestId}/reject`);
+            fetchPendingSettlements();
+        } catch (e) {
+            Alert.alert(
+                "Couldn't reject",
+                e?.response?.data?.message || "Failed to reject settlement request."
+            );
+        }
+    };
+
+    const handleCancelSettlement = async (requestId) => {
+        try {
+            await api.post(`/expenses/settle/${requestId}/cancel`);
+            fetchPendingSettlements();
+        } catch (e) {
+            Alert.alert(
+                "Couldn't cancel",
+                e?.response?.data?.message || "Failed to cancel settlement request."
             );
         }
     };
@@ -428,7 +500,18 @@ export default function GroupDetailPage() {
                             <View style={styles.emptyExpensesIcon}>
                                 <Receipt size={22} color={colors.primary} />
                             </View>
-                            <Text style={styles.emptyText}>No expenses yet.</Text>
+                            <Text style={styles.emptyTitle}>No expenses yet</Text>
+                            <Text style={styles.emptyText}>
+                                Log your first bill and we&apos;ll split it automatically.
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.emptyExpensesCta}
+                                onPress={() => setShowExpenseModal(true)}
+                                activeOpacity={0.85}
+                            >
+                                <Plus size={16} color="#fff" />
+                                <Text style={styles.emptyExpensesCtaText}>Add Expense</Text>
+                            </TouchableOpacity>
                         </View>
                     ) : (
                         <View style={styles.memberExpensesList}>
@@ -481,8 +564,12 @@ export default function GroupDetailPage() {
                 <View style={styles.section}>
                     <GroupBalanceSection
                         balances={balances}
+                        pendingSettlements={pendingSettlements}
                         meId={userId}
-                        onSettle={handleRecordSettlement}
+                        onRequestSettlement={handleRequestSettlement}
+                        onConfirmSettlement={handleConfirmSettlement}
+                        onRejectSettlement={handleRejectSettlement}
+                        onCancelSettlement={handleCancelSettlement}
                     />
                 </View>
 
@@ -1100,6 +1187,27 @@ const getStyles = (colors) => StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         marginBottom: 12,
+    },
+    emptyTitle: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: colors.text,
+        marginBottom: 4,
+    },
+    emptyExpensesCta: {
+        marginTop: 16,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: colors.primary,
+        paddingVertical: 10,
+        paddingHorizontal: 18,
+        borderRadius: 10,
+    },
+    emptyExpensesCtaText: {
+        color: "#fff",
+        fontSize: 13,
+        fontWeight: "700",
     },
     expensesList: {
         gap: 0,

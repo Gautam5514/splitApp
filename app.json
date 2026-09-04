@@ -94,7 +94,7 @@
         {
           "icon": "./assets/images/android-icon-monochrome.png",
           "color": "#4f46e5",
-          "sounds": []
+          "sounds": ["./assets/sounds/notification.wav"]
         }
       ],
       "expo-secure-store",
