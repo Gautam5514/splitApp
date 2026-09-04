@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/context/ThemeContext";
 import { Tabs, router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,9 +5,6 @@ import { BlurView } from "expo-blur";
 import { Home, MessageCircle, Plus, Sparkles, User } from "lucide-react-native";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useEffect, useRef } from "react";
-
-const ONBOARDING_KEY = "onboarding_seen_v1";
 
 function CustomTabBar({ state, navigation }) {
     const insets = useSafeAreaInsets();
@@ -107,20 +103,6 @@ function CustomTabBar({ state, navigation }) {
 
 export default function TabsLayout() {
     const insets = useSafeAreaInsets();
-    const hasNavigatedRef = useRef(false);
-
-    useEffect(() => {
-        const checkOnboarding = async () => {
-            try {
-                const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
-                if (!seen && !hasNavigatedRef.current) {
-                    hasNavigatedRef.current = true;
-                    router.push("/onboarding");
-                }
-            } catch {}
-        };
-        checkOnboarding();
-    }, []);
 
     return (
         <View style={{ flex: 1 }}>
