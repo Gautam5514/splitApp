@@ -204,13 +204,29 @@ export default function GroupDetailPage() {
         }
     };
 
-    const handleRemove = async (userId) => {
-        try {
-            const res = await api.delete(`/groups/${groupId}/members/${userId}`);
-            setGroup(res.data);
-        } catch (e) {
-            console.error("Failed to remove member");
-        }
+    const handleRemove = (memberId, memberName) => {
+        Alert.alert(
+            "Remove member?",
+            `${memberName || "This member"} will lose access to this group and its expenses. This can't be undone.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Remove",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const res = await api.delete(`/groups/${groupId}/members/${memberId}`);
+                            setGroup(res.data);
+                        } catch (e) {
+                            Alert.alert(
+                                "Couldn't remove member",
+                                e?.response?.data?.message || "Please try again."
+                            );
+                        }
+                    },
+                },
+            ]
+        );
     };
 
     const handleExpenseAdded = () => {
@@ -461,7 +477,7 @@ export default function GroupDetailPage() {
                                         </View>
                                     ) : (
                                         <TouchableOpacity
-                                            onPress={() => handleRemove(m._id)}
+                                            onPress={() => handleRemove(m._id, m.name)}
                                             style={styles.removeButton}
                                         >
                                             <X size={14} color={colors.textSecondary} />
