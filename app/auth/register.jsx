@@ -3,12 +3,14 @@ import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
 import { useGoogleAuth } from "@/lib/googleAuth";
+import { redirectAfterAuth } from "@/lib/pendingInvite";
 import GoogleIcon from "@/components/GoogleIcon";
 import { Loader } from "@/components/Loader";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { ArrowLeft, Eye, EyeOff, Mail } from "lucide-react-native";
-import { useState } from "react";
+import { signInWithCustomToken } from "firebase/auth";
+import { ArrowLeft, Eye, EyeOff, Mail, ShieldCheck } from "lucide-react-native";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -27,6 +29,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const INDIGO = "#6366F1";
 const INDIGO_DARK = "#818CF8";
+const OTP_LENGTH = 6;
+const RESEND_SECONDS = 60;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const getStoredReferralCode = async () => {
+  try {
+    return (await AsyncStorage.getItem("referralCode")) || undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export default function RegisterScreen() {
   const { saveToken } = useAuth();
@@ -40,7 +53,7 @@ export default function RegisterScreen() {
   const borderDefault = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
   const borderFocus = accent;
 
-  // step: "start" | "form"
+  // step: "start" | "form" | "otp"
   const [step, setStep] = useState("start");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -48,40 +61,156 @@ export default function RegisterScreen() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState(null);
+  const [otp, setOtp] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const otpRef = useRef(null);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(
+      () => setResendCooldown((seconds) => Math.max(0, seconds - 1)),
+      1000
+    );
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const onRegister = async () => {
-    if (!name || !email || !password) {
+    const normalizedName = name.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedName || !normalizedEmail || !password) {
       Alert.alert("Missing fields", "Please fill in all fields.");
       return;
     }
-    if (password.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
+    if (normalizedName.length < 2) {
+      Alert.alert("Invalid name", "Name must be at least 2 characters.");
+      return;
+    }
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      Alert.alert("Invalid email", "Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+      Alert.alert(
+        "Weak password",
+        "Use at least 8 characters, including one uppercase letter and one number."
+      );
       return;
     }
     try {
       setLoading(true);
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(res.user, { displayName: name });
-      const firebaseToken = await res.user.getIdToken();
-      try {
-        await api.post("/auth/google", { token: firebaseToken });
-        await saveToken(firebaseToken);
-        router.replace("/(tabs)/home");
-      } catch {
-        Alert.alert("Warning", "Account created, but failed to connect to backend.");
-      }
+      const { data } = await api.post("/auth/send-signup-otp", {
+        name: normalizedName,
+        email: normalizedEmail,
+        password,
+      });
+      setOtp("");
+      setStep("otp");
+      setResendCooldown(data?.retryAfterSeconds || RESEND_SECONDS);
+      Alert.alert(
+        "Check your email",
+        data?.codePending
+          ? "Use the verification code already sent to your email."
+          : "We sent you a 6-digit verification code."
+      );
     } catch (error) {
-      const msg =
-        error.code === "auth/email-already-in-use"
-          ? "This email is already registered."
-          : error.code === "auth/invalid-email"
-          ? "Invalid email address."
-          : error.code === "auth/weak-password"
-          ? "Password is too weak."
-          : "Registration failed. Please try again.";
-      Alert.alert("Error", msg);
+      const data = error?.response?.data;
+      // Compatibility with backend versions that returned 429 when a valid
+      // signup code was already pending. The user should enter that code, not
+      // be left on the form with a misleading failure.
+      const codeAlreadySent =
+        error?.response?.status === 429 &&
+        (data?.codePending || /code (was|has been) just sent/i.test(data?.message || ""));
+      if (codeAlreadySent) {
+        setOtp("");
+        setStep("otp");
+        setResendCooldown(data?.retryAfterSeconds || RESEND_SECONDS);
+        Alert.alert("Check your email", "Use the verification code already sent to your email.");
+        return;
+      }
+      Alert.alert(
+        "Couldn't send code",
+        data?.message ||
+          (error?.request
+            ? "Couldn't reach the server. Check your internet connection and try again."
+            : "Registration failed. Please try again.")
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onVerifyOtp = async () => {
+    if (otp.length !== OTP_LENGTH) {
+      Alert.alert("Incomplete code", "Please enter the complete 6-digit code.");
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+      const referralCode = await getStoredReferralCode();
+      const { data } = await api.post("/auth/verify-signup-otp", {
+        email: email.trim().toLowerCase(),
+        otp,
+        password,
+        referralCode,
+      });
+      const result = await signInWithCustomToken(auth, data.customToken);
+      const idToken = await result.user.getIdToken();
+      await AsyncStorage.removeItem("referralCode").catch(() => {});
+      await saveToken(idToken);
+      await redirectAfterAuth();
+    } catch (error) {
+      const data = error?.response?.data;
+      if (data?.field === "email") {
+        setStep("form");
+        setOtp("");
+      }
+      Alert.alert(
+        "Verification failed",
+        data?.message ||
+          (error?.request
+            ? "Couldn't reach the server. Check your internet connection and try again."
+            : error?.message || "Invalid or expired code. Please try again.")
+      );
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const onResendOtp = async () => {
+    if (resendCooldown > 0 || otpLoading) return;
+    try {
+      setOtpLoading(true);
+      const { data } = await api.post("/auth/send-signup-otp", {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      setOtp("");
+      setResendCooldown(data?.retryAfterSeconds || RESEND_SECONDS);
+      Alert.alert(
+        data?.codePending ? "Code already sent" : "Code sent",
+        data?.codePending
+          ? "Use the verification code already sent to your email."
+          : "A new verification code is on its way."
+      );
+    } catch (error) {
+      const data = error?.response?.data;
+      const codeAlreadySent =
+        error?.response?.status === 429 &&
+        (data?.codePending || /code (was|has been) just sent/i.test(data?.message || ""));
+      if (codeAlreadySent) {
+        setResendCooldown(data?.retryAfterSeconds || RESEND_SECONDS);
+        Alert.alert("Code already sent", "Use the verification code already sent to your email.");
+        return;
+      }
+      Alert.alert(
+        "Couldn't resend",
+        data?.message || "Please wait a moment and try again."
+      );
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -91,10 +220,12 @@ export default function RegisterScreen() {
       const result = await googleSignIn();
       if (!result?.user) return;
       const firebaseToken = await result.user.getIdToken();
+      const referralCode = await getStoredReferralCode();
       try {
-        await api.post("/auth/google", { token: firebaseToken });
+        await api.post("/auth/google", { token: firebaseToken, referralCode });
+        await AsyncStorage.removeItem("referralCode").catch(() => {});
         await saveToken(firebaseToken);
-        router.replace("/(tabs)/home");
+        await redirectAfterAuth();
       } catch {
         Alert.alert("Warning", "Google auth succeeded but failed to connect to backend.");
       }
@@ -121,7 +252,10 @@ export default function RegisterScreen() {
           <Animated.View entering={FadeInDown.duration(400)}>
             <TouchableOpacity
               onPress={() => {
-                if (step === "form") {
+                if (step === "otp") {
+                  setStep("form");
+                  setOtp("");
+                } else if (step === "form") {
                   setStep("start");
                 } else if (router.canGoBack()) {
                   router.back();
@@ -137,7 +271,7 @@ export default function RegisterScreen() {
           </Animated.View>
 
           {/* Headline */}
-          <Animated.View entering={FadeInDown.delay(80).duration(500)} style={styles.headlineBlock}>
+          {step !== "otp" && <Animated.View entering={FadeInDown.delay(80).duration(500)} style={styles.headlineBlock}>
             <View style={styles.logoRow}>
               <Image
                 source={require("../../assets/images/icon.png")}
@@ -151,7 +285,7 @@ export default function RegisterScreen() {
             <Text style={[styles.sub, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>
               Join SplitEase and split smarter
             </Text>
-          </Animated.View>
+          </Animated.View>}
 
           {/* ── STEP: start (minimal: choose Google or email) ───────────── */}
           {step === "start" && (
@@ -256,7 +390,7 @@ export default function RegisterScreen() {
               >
                 <TextInput
                   style={[styles.inputInner, { color: isDark ? "#ffffff" : "#0a0a12" }]}
-                  placeholder="min. 6 characters"
+                  placeholder="min. 8 characters"
                   placeholderTextColor={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"}
                   secureTextEntry={!showPass}
                   value={password}
@@ -272,7 +406,7 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
               </View>
               <Text style={[styles.hint, { color: isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.25)" }]}>
-                Must be at least 6 characters
+                At least 8 characters, one uppercase letter, and one number
               </Text>
             </View>
 
@@ -290,8 +424,79 @@ export default function RegisterScreen() {
           </Animated.View>
           )}
 
+          {/* ── STEP: verify email before creating the account ─────────── */}
+          {step === "otp" && (
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.form}>
+              <View style={styles.stepIconWrap}>
+                <View style={[styles.stepIconCircle, { backgroundColor: accent + "1A" }]}>
+                  <ShieldCheck size={26} color={accent} />
+                </View>
+              </View>
+              <Text style={[styles.headlineSm, { color: isDark ? "#ffffff" : "#0a0a12" }]}>Verify your email</Text>
+              <Text style={[styles.sub, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>
+                We sent a 6-digit code to{"\n"}
+                <Text style={{ color: isDark ? "#ffffff" : "#0a0a12", fontWeight: "700" }}>
+                  {email.trim().toLowerCase()}
+                </Text>
+              </Text>
+
+              <TouchableOpacity activeOpacity={1} onPress={() => otpRef.current?.focus()} style={styles.otpRow}>
+                {Array.from({ length: OTP_LENGTH }).map((_, index) => {
+                  const digit = otp[index] || "";
+                  const isActive = index === otp.length;
+                  return (
+                    <View
+                      key={index}
+                      style={[
+                        styles.otpCell,
+                        { backgroundColor: surface, borderColor: isActive ? accent : borderDefault },
+                      ]}
+                    >
+                      <Text style={[styles.otpCellText, { color: isDark ? "#ffffff" : "#0a0a12" }]}>{digit}</Text>
+                    </View>
+                  );
+                })}
+              </TouchableOpacity>
+              <TextInput
+                ref={otpRef}
+                value={otp}
+                onChangeText={(value) => setOtp(value.replace(/[^0-9]/g, "").slice(0, OTP_LENGTH))}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
+                autoFocus
+                maxLength={OTP_LENGTH}
+                style={styles.hiddenInput}
+              />
+
+              <TouchableOpacity
+                style={[styles.primaryBtn, { backgroundColor: accent, opacity: otpLoading || otp.length !== OTP_LENGTH ? 0.6 : 1 }]}
+                onPress={onVerifyOtp}
+                disabled={otpLoading || otp.length !== OTP_LENGTH}
+                activeOpacity={0.85}
+              >
+                {otpLoading ? <Loader size={20} color="#fff" /> : <Text style={styles.primaryBtnText}>Verify & create account</Text>}
+              </TouchableOpacity>
+
+              <View style={styles.resendRow}>
+                {resendCooldown > 0 ? (
+                  <Text style={[styles.resendMuted, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>Resend code in {resendCooldown}s</Text>
+                ) : (
+                  <Text style={[styles.resendLink, { color: accent }]} onPress={onResendOtp}>Resend code</Text>
+                )}
+              </View>
+
+              <Text
+                style={[styles.backToForm, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}
+                onPress={() => { setStep("form"); setOtp(""); }}
+              >
+                Change email or password
+              </Text>
+            </Animated.View>
+          )}
+
           {/* Footer */}
-          <Animated.View entering={FadeInDown.delay(240).duration(500)} style={styles.footer}>
+          {step !== "otp" && <Animated.View entering={FadeInDown.delay(240).duration(500)} style={styles.footer}>
             <Text style={[styles.footerText, { color: isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)" }]}>
               Already have an account?{"  "}
               <Text
@@ -301,7 +506,7 @@ export default function RegisterScreen() {
                 Sign in
               </Text>
             </Text>
-          </Animated.View>
+          </Animated.View>}
         </ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -437,6 +642,43 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     marginTop: -2,
   },
+
+  // Email verification
+  stepIconWrap: { alignItems: "center", marginTop: 16 },
+  stepIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headlineSm: {
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.7,
+    textAlign: "center",
+  },
+  otpRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    marginTop: 4,
+  },
+  otpCell: {
+    flex: 1,
+    aspectRatio: 0.85,
+    maxHeight: 58,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  otpCellText: { fontSize: 24, fontWeight: "700" },
+  hiddenInput: { position: "absolute", width: 1, height: 1, opacity: 0 },
+  resendRow: { alignItems: "center", marginTop: -6 },
+  resendMuted: { fontSize: 13 },
+  resendLink: { fontSize: 13, fontWeight: "700" },
+  backToForm: { fontSize: 13, textAlign: "center", marginTop: -6 },
 
   // Primary button
   primaryBtn: {
