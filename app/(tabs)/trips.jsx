@@ -43,7 +43,6 @@ export default function TripsPage() {
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [inviteGroupId, setInviteGroupId] = useState(null);
-    const [createType, setCreateType] = useState("trip");
     const [joinOpen, setJoinOpen] = useState(false);
     const [joinCode, setJoinCode] = useState("");
 
@@ -131,7 +130,7 @@ export default function TripsPage() {
         if (!searchQuery.trim()) return;
         try {
             setCreating(true);
-            const res = await api.post("/groups", { name: searchQuery.trim(), groupType: createType });
+            const res = await api.post("/groups", { name: searchQuery.trim() });
             setInviteGroupId(res.data._id);
             fetchMeAndGroups();
             setSearchQuery("");
@@ -273,7 +272,7 @@ export default function TripsPage() {
                 <View style={styles.unifiedInputContainer}>
                     <Search size={20} color={colors.textSecondary} />
                     <TextInput
-                        placeholder={createType === "trip" ? "Search or name a new trip…" : "Search or name roommate split…"}
+                        placeholder="Search or name a new group…"
                         placeholderTextColor={colors.textSecondary || "#9CA3AF"}
                         style={styles.unifiedInput}
                         value={searchQuery}
@@ -293,7 +292,6 @@ export default function TripsPage() {
                             disabled={creating}
                             style={[
                                 styles.unifiedCreateBtn,
-                                createType === "roommate" && { backgroundColor: "#10B981" },
                                 creating && styles.unifiedCreateBtnDisabled,
                             ]}
                         >
@@ -308,48 +306,6 @@ export default function TripsPage() {
                         </TouchableOpacity>
                     )}
                 </View>
-
-                {searchQuery.length > 0 && (
-                    <View style={styles.typeSwitcherContainer}>
-                        <TouchableOpacity
-                            onPress={() => setCreateType("trip")}
-                            style={[
-                                styles.typeSwitcherButton,
-                                createType === "trip" && styles.typeSwitcherActiveTrip,
-                            ]}
-                            activeOpacity={0.8}
-                        >
-                            <Plane size={14} color={createType === "trip" ? "white" : colors.textSecondary} />
-                            <Text
-                                style={[
-                                    styles.typeSwitcherText,
-                                    createType === "trip" && styles.typeSwitcherTextActive,
-                                ]}
-                            >
-                                Trip Split
-                            </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={() => setCreateType("roommate")}
-                            style={[
-                                styles.typeSwitcherButton,
-                                createType === "roommate" && styles.typeSwitcherActiveRoom,
-                            ]}
-                            activeOpacity={0.8}
-                        >
-                            <Home size={14} color={createType === "roommate" ? "white" : colors.textSecondary} />
-                            <Text
-                                style={[
-                                    styles.typeSwitcherText,
-                                    createType === "roommate" && styles.typeSwitcherTextActive,
-                                ]}
-                            >
-                                Roommate Split
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
 
                 {/* Search and filters */}
                 {!loading && groups.length > 0 && (
@@ -518,18 +474,32 @@ const GroupCard = memo(function GroupCard({ group, isCreator = false, view = "al
                         </View>
                         <View style={[
                             styles.typeBadge,
-                            group.groupType === "roommate" ? styles.roommateBadge : styles.tripBadge
+                            group.groupType === "roommate"
+                                ? styles.roommateBadge
+                                : group.groupType === "trip"
+                                    ? styles.tripBadge
+                                    : styles.groupBadge
                         ]}>
                             {group.groupType === "roommate" ? (
                                 <Home size={11} color="#047857" />
-                            ) : (
+                            ) : group.groupType === "trip" ? (
                                 <Plane size={11} color="#4F46E5" />
+                            ) : (
+                                <Users size={11} color="#6D28D9" />
                             )}
                             <Text style={[
                                 styles.typeBadgeText,
-                                group.groupType === "roommate" ? styles.roommateBadgeText : styles.tripBadgeText
+                                group.groupType === "roommate"
+                                    ? styles.roommateBadgeText
+                                    : group.groupType === "trip"
+                                        ? styles.tripBadgeText
+                                        : styles.groupBadgeText
                             ]}>
-                                {group.groupType === "roommate" ? "Roommate" : "Trip"}
+                                {group.groupType === "roommate"
+                                    ? "Roommate"
+                                    : group.groupType === "trip"
+                                        ? "Trip"
+                                        : "Group"}
                             </Text>
                         </View>
                         {isGroupCompleted(group) && (
@@ -1088,40 +1058,6 @@ const getStyles = (colors) => StyleSheet.create({
         fontSize: 14,
         fontWeight: "600",
     },
-    // Type switcher styles
-    typeSwitcherContainer: {
-        flexDirection: "row",
-        backgroundColor: "rgba(0,0,0,0.03)",
-        borderRadius: 12,
-        padding: 4,
-        marginHorizontal: 24,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    typeSwitcherButton: {
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        paddingVertical: 8,
-        borderRadius: 8,
-    },
-    typeSwitcherActiveTrip: {
-        backgroundColor: colors.primary,
-    },
-    typeSwitcherActiveRoom: {
-        backgroundColor: "#10B981",
-    },
-    typeSwitcherText: {
-        fontSize: 13,
-        fontWeight: "600",
-        color: colors.textSecondary,
-    },
-    typeSwitcherTextActive: {
-        color: "white",
-    },
     // Group Type badges
     typeBadge: {
         flexDirection: "row",
@@ -1144,6 +1080,14 @@ const getStyles = (colors) => StyleSheet.create({
     },
     tripBadgeText: {
         color: "#4F46E5",
+        fontSize: 11,
+        fontWeight: "800",
+    },
+    groupBadge: {
+        backgroundColor: "#EDE9FE",
+    },
+    groupBadgeText: {
+        color: "#6D28D9",
         fontSize: 11,
         fontWeight: "800",
     },

@@ -1,7 +1,8 @@
 import { useAuth } from "@/context/AuthContext";
+import { getPendingJoinCodeFromInstallReferrer } from "@/lib/installReferrer";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Dimensions, Image, StatusBar, StyleSheet, View } from "react-native";
+import { Dimensions, Image, Platform, StatusBar, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   FadeIn,
@@ -23,6 +24,8 @@ const RING_ARC = RING_CIRC / 3 - 34;
 
 export default function HomeScreen() {
   const [isMinTimeElapsed, setMinTimeElapsed] = useState(false);
+  const [referrerChecked, setReferrerChecked] = useState(Platform.OS !== "android");
+  const [pendingJoinCode, setPendingJoinCode] = useState(null);
   const { token, loading } = useAuth();
 
   // Splash keeps a fixed black brand look, independent of the user's
@@ -42,10 +45,17 @@ export default function HomeScreen() {
   }, [spin, pulse]);
 
   useEffect(() => {
-    if (!loading && isMinTimeElapsed) {
-      router.replace(token ? "/(tabs)/home" : "/auth/register");
+    getPendingJoinCodeFromInstallReferrer()
+      .then(setPendingJoinCode)
+      .finally(() => setReferrerChecked(true));
+  }, []);
+
+  useEffect(() => {
+    if (!loading && isMinTimeElapsed && referrerChecked) {
+      if (pendingJoinCode) router.replace(`/join/${pendingJoinCode}`);
+      else router.replace(token ? "/(tabs)/home" : "/auth/register");
     }
-  }, [loading, isMinTimeElapsed, token]);
+  }, [loading, isMinTimeElapsed, referrerChecked, pendingJoinCode, token]);
 
   const spinStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value}deg` }] }));
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));

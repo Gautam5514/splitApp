@@ -5,6 +5,7 @@ import InviteModal from "@/components/InviteModal";
 import MemberPicker from "@/components/MemberPicker";
 import NotepadSection from "@/components/Notepad/NotepadSection";
 import OcrViewModal from "@/components/OcrViewModal";
+import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import socket, { connectSocket } from "@/lib/socket";
@@ -63,6 +64,7 @@ const categoryIcons = {
 
 export default function GroupDetailPage() {
     const { colors, theme } = useTheme();
+    const { token, loading: authLoading } = useAuth();
     const params = useLocalSearchParams();
     const groupId = params?.id;
     const returnTo = params?.returnTo;
@@ -154,20 +156,28 @@ export default function GroupDetailPage() {
     };
 
     useEffect(() => {
-        if (groupId) {
-            fetchMe();
-            fetchGroup();
-            fetchExpenses();
-            fetchBalances();
-            fetchPendingSettlements();
-        }
-    }, [groupId]);
+        // Wait for Firebase to finish restoring the session (cold start, or a
+        // fast deep-link straight into a group) before firing any request.
+        // Without this gate, `/users/me` could go out with no auth token yet,
+        // fail, and leave `userId` stuck at null for the rest of this screen's
+        // life - which silently disables the settlement "I've Paid"/"Mark as
+        // Received" buttons (they're gated on knowing who "me" is) even though
+        // every other part of the screen looks fine. Web already guards this
+        // the same way (see frontend/app/groups/[id]/page.jsx).
+        if (authLoading) return;
+        if (!groupId || !token) return;
+        fetchMe();
+        fetchGroup();
+        fetchExpenses();
+        fetchBalances();
+        fetchPendingSettlements();
+    }, [groupId, token, authLoading]);
 
     // Live refresh: any confirm/reject/cancel from the other party (or from
     // this user on another device) pushes a "settlementUpdate" event to
     // everyone viewing this group, so balances/pending never go stale.
     useEffect(() => {
-        if (!groupId) return;
+        if (!groupId || !token) return;
         connectSocket();
         socket.emit("joinGroup", groupId);
         const onSettlementUpdate = (payload) => {
@@ -181,7 +191,7 @@ export default function GroupDetailPage() {
             socket.off("settlementUpdate", onSettlementUpdate);
             socket.emit("leaveGroup", groupId);
         };
-    }, [groupId]);
+    }, [groupId, token]);
 
     const retryLoad = () => {
         fetchMe();
@@ -204,13 +214,29 @@ export default function GroupDetailPage() {
         }
     };
 
-    const handleRemove = async (userId) => {
-        try {
-            const res = await api.delete(`/groups/${groupId}/members/${userId}`);
-            setGroup(res.data);
-        } catch (e) {
-            console.error("Failed to remove member");
-        }
+    const handleRemove = (memberId, memberName) => {
+        Alert.alert(
+            "Remove member?",
+            `${memberName || "This member"} will lose access to this group and its expenses. This can't be undone.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Remove",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const res = await api.delete(`/groups/${groupId}/members/${memberId}`);
+                            setGroup(res.data);
+                        } catch (e) {
+                            Alert.alert(
+                                "Couldn't remove member",
+                                e?.response?.data?.message || "Please try again."
+                            );
+                        }
+                    },
+                },
+            ]
+        );
     };
 
     const handleExpenseAdded = () => {
@@ -406,12 +432,20 @@ export default function GroupDetailPage() {
                             styles={styles}
                             onAddBillPressed={triggerPrefilledExpense}
                         />
-                    ) : (
+                    ) : group.groupType === "trip" ? (
                         <TripStatsWidget
                             group={group}
                             expenses={expenses}
                             colors={colors}
                             styles={styles}
+                        />
+                    ) : (
+                        <SimpleGroupWidget
+                            group={group}
+                            expenses={expenses}
+                            colors={colors}
+                            styles={styles}
+                            onAddExpensePressed={() => triggerPrefilledExpense("", "general")}
                         />
                     )}
                 </View>
@@ -461,7 +495,7 @@ export default function GroupDetailPage() {
                                         </View>
                                     ) : (
                                         <TouchableOpacity
-                                            onPress={() => handleRemove(m._id)}
+                                            onPress={() => handleRemove(m._id, m.name)}
                                             style={styles.removeButton}
                                         >
                                             <X size={14} color={colors.textSecondary} />
@@ -937,6 +971,51 @@ function RoommateChecklistWidget({ group, expenses, colors, styles, onAddBillPre
                         );
                     })}
                 </View>
+            </View>
+        </View>
+    );
+}
+
+function SimpleGroupWidget({ group, expenses, colors, styles, onAddExpensePressed }) {
+    const totalSpent = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const memberCount = group.members?.length || 0;
+
+    return (
+        <View style={styles.widgetCard}>
+            <LinearGradient
+                colors={["#0891B2", "#0EA5E9"]}
+                style={styles.widgetHeaderGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+            >
+                <View style={styles.widgetHeaderTitleRow}>
+                    <Wallet2 size={18} color="white" />
+                    <Text style={styles.widgetHeaderTitle}>Group Overview</Text>
+                </View>
+            </LinearGradient>
+
+            <View style={styles.widgetBody}>
+                <View style={styles.gridStats}>
+                    <View style={styles.statBox}>
+                        <Receipt size={16} color={colors.primary} style={{ marginBottom: 4 }} />
+                        <Text style={styles.statLabel}>Total Spent</Text>
+                        <Text style={styles.statValue}>₹{totalSpent.toFixed(0)}</Text>
+                    </View>
+                    <View style={styles.statBox}>
+                        <Users2 size={16} color={colors.primary} style={{ marginBottom: 4 }} />
+                        <Text style={styles.statLabel}>Members</Text>
+                        <Text style={styles.statValue}>{memberCount}</Text>
+                    </View>
+                </View>
+
+                <TouchableOpacity
+                    style={[styles.saveBtn, { width: "100%", flexDirection: "row", gap: 6, marginTop: 12, height: 44 }]}
+                    onPress={onAddExpensePressed}
+                    activeOpacity={0.85}
+                >
+                    <Plus size={16} color="white" />
+                    <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Add Expense</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
