@@ -3,6 +3,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
 import { useGoogleAuth } from "@/lib/googleAuth";
+import { redirectAfterAuth } from "@/lib/pendingInvite";
 import GoogleIcon from "@/components/GoogleIcon";
 import { Loader } from "@/components/Loader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -133,7 +134,7 @@ export default function LoginScreen() {
       const referralCode = await getStoredReferralCode();
       await api.post("/auth/google", { token: idToken, referralCode });
       await saveToken(idToken);
-      router.replace("/(tabs)/home");
+      await redirectAfterAuth();
     } catch (e) {
       Alert.alert(
         "Verification failed",
@@ -174,7 +175,7 @@ export default function LoginScreen() {
       try {
         await api.post("/auth/google", { token: firebaseToken, referralCode });
         await saveToken(firebaseToken);
-        router.replace("/(tabs)/home");
+        await redirectAfterAuth();
       } catch {
         Alert.alert("Warning", "Google sign-in succeeded but failed to connect to backend.");
       }

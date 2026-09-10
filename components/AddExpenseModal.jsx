@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Image as ImageIcon, Wallet2, X } from "lucide-react-native";
 import { useState } from "react";
 import {
+    Alert,
     Modal,
     Image as RNImage,
     ScrollView,
@@ -60,13 +61,37 @@ export default function AddExpenseModal({ group, onClose, onSuccess, initialDesc
             let fileUrl = null;
 
             if (imageBase64) {
-                const uploadRes = await api.post("/upload", {
-                    file: imageBase64,
-                    folder: "splitwise_receipts",
-                    resourceType: "auto",
-                });
+                try {
+                    // The shared `api` client has a 15s timeout tuned for normal
+                    // JSON calls. A base64-encoded receipt photo has to travel
+                    // client -> our server -> Cloudinary -> our server -> client,
+                    // which routinely takes longer than that on real mobile
+                    // networks - so it was timing out silently and the whole
+                    // expense never got created. Give this one call more room.
+                    const uploadRes = await api.post(
+                        "/upload",
+                        {
+                            file: imageBase64,
+                            folder: "splitwise_receipts",
+                            resourceType: "auto",
+                        },
+                        { timeout: 60000 }
+                    );
 
-                fileUrl = uploadRes.data?.url;
+                    fileUrl = uploadRes.data?.url;
+                } catch (uploadErr) {
+                    console.error("Receipt upload failed:", uploadErr);
+                    const isTimeout = uploadErr?.code === "ECONNABORTED";
+                    Alert.alert(
+                        "Couldn't upload image",
+                        isTimeout
+                            ? "The upload timed out - check your connection and try again, or add the expense without a receipt."
+                            : uploadErr?.response?.data?.message ||
+                                  "The receipt image couldn't be uploaded. Try again or add the expense without it."
+                    );
+                    setLoading(false);
+                    return;
+                }
             }
 
             await api.post("/expenses", {
@@ -82,6 +107,10 @@ export default function AddExpenseModal({ group, onClose, onSuccess, initialDesc
             onClose();
         } catch (err) {
             console.error("Failed to add expense:", err);
+            Alert.alert(
+                "Couldn't add expense",
+                err?.response?.data?.message || "Something went wrong. Please try again."
+            );
         } finally {
             setLoading(false);
         }
