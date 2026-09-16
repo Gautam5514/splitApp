@@ -10,21 +10,32 @@
           },
           "preview": {
                   "distribution": "internal",
+                  "environment": "production",
                   "android": {
                             "buildType": "apk"
+                  },
+                  "env": {
+                            "EXPO_PUBLIC_API_URL": "https://api.split.elitecrew.online"
                   }
           },
           "production": {
                   "autoIncrement": true,
                   "android": {
                             "buildType": "app-bundle"
+                  },
+                  "env": {
+                            "EXPO_PUBLIC_API_URL": "https://api.split.elitecrew.online"
                   }
           },
           "production-apk": {
                   "autoIncrement": true,
                   "distribution": "internal",
+                  "environment": "production",
                   "android": {
                             "buildType": "apk"
+                  },
+                  "env": {
+                            "EXPO_PUBLIC_API_URL": "https://api.split.elitecrew.online"
                   }
           }
     },

@@ -1,6 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
-import { syncPushTokenWithBackend } from "@/lib/pushNotifications";
 import socket, { connectSocket } from "@/lib/socket";
 import * as Notifications from "expo-notifications";
 import {
@@ -61,15 +60,10 @@ export function NotificationProvider({ children }) {
         return () => sub.remove();
     }, [token, fetchNotifications]);
 
-    // Register this device's Expo push token with the backend on login.
-    // Uses the existing /notifications/push-token endpoint (Expo push), which
-    // the backend already dispatches to alongside web FCM — additive, no web impact.
-    useEffect(() => {
-        if (!token) return;
-        syncPushTokenWithBackend().catch((err) =>
-            console.log("Push token sync failed:", err?.message)
-        );
-    }, [token]);
+    // Push token registration is owned solely by usePushNotifications (mounted
+    // once in app/_layout.jsx) — a duplicate call used to live here too, and
+    // the two racing registrations were creating two token entries per device
+    // in the backend, causing every push to be delivered twice.
 
     // Keep the in-app bell in sync when a system notification arrives or is tapped.
     useEffect(() => {

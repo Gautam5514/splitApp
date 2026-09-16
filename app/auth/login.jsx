@@ -1,34 +1,22 @@
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
 import { useGoogleAuth } from "@/lib/googleAuth";
 import { redirectAfterAuth } from "@/lib/pendingInvite";
-import GoogleIcon from "@/components/GoogleIcon";
-import { Loader } from "@/components/Loader";
+import { AUTH_PLACEHOLDER, AuthDivider, AuthScreen, GoogleButton, GradientButton, authStyles } from "@/components/AuthScreenUI";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { ArrowLeft, Eye, EyeOff, Mail, MailCheck, ShieldCheck } from "lucide-react-native";
+import { Eye, EyeOff, MailCheck, ShieldCheck } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
 
-const INDIGO = "#6366F1";
-const INDIGO_DARK = "#818CF8";
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
 
@@ -43,20 +31,8 @@ const getStoredReferralCode = async () => {
 export default function LoginScreen() {
   const { saveToken } = useAuth();
   const { signIn: googleSignIn } = useGoogleAuth();
-  const { theme } = useTheme();
-
-  const isDark = theme === "dark";
-  const accent = isDark ? INDIGO_DARK : INDIGO;
-  const bg = isDark ? "#09090f" : "#ffffff";
-  const surface = isDark ? "#111118" : "#f9f9fb";
-  const borderDefault = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
-  const borderFocus = accent;
-  const labelColor = isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.45)";
-  const textColor = isDark ? "#ffffff" : "#0a0a12";
-  const subColor = isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)";
-
-  // step: "start" | "login" | "otp" | "forgot" | "forgotSent"
-  const [step, setStep] = useState("start");
+  // The login route opens directly on the credentials form.
+  const [step, setStep] = useState("login");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,7 +56,12 @@ export default function LoginScreen() {
     return () => clearInterval(t);
   }, [resendCooldown]);
 
-  // ── Step 1: validate credentials + send OTP ──────────────────────────────
+  // ── Step 1: validate credentials, sign in directly ───────────────────────
+  // Login OTP is intentionally disabled, matching the web app
+  // (frontend/app/(auth)/login/page.jsx LOGIN_OTP_ENABLED = false): the OTP
+  // at signup already proves the inbox, so asking again on every login was
+  // unnecessary friction. onResendOtp/onVerifyOtp below are kept for later
+  // but are now unreachable from this screen.
   const onRequestOtp = async () => {
     if (!email || !password) {
       Alert.alert("Missing fields", "Please enter your email and password.");
@@ -88,15 +69,27 @@ export default function LoginScreen() {
     }
     try {
       setLoading(true);
-      await api.post("/auth/send-login-otp", { email: email.trim(), password });
-      setStep("otp");
-      setOtp("");
-      setResendCooldown(RESEND_SECONDS);
+      const result = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const idToken = await result.user.getIdToken();
+      const referralCode = await getStoredReferralCode();
+      await api.post("/auth/google", { token: idToken, referralCode });
+      await saveToken(idToken);
+      await redirectAfterAuth();
     } catch (e) {
-      Alert.alert(
-        "Sign in failed",
-        e?.response?.data?.message || "Invalid email or password."
-      );
+      if (
+        e?.code === "auth/invalid-credential" ||
+        e?.code === "auth/wrong-password" ||
+        e?.code === "auth/user-not-found"
+      ) {
+        Alert.alert("Sign in failed", "Invalid email or password.");
+      } else if (e?.code === "auth/too-many-requests") {
+        Alert.alert("Sign in failed", "Too many login attempts. Please try again later.");
+      } else {
+        Alert.alert(
+          "Sign in failed",
+          e?.response?.data?.message || e?.message || "Invalid email or password."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -187,367 +180,129 @@ export default function LoginScreen() {
   };
 
   const onBack = () => {
-    if (step === "start") {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/auth/register");
-      }
-    } else if (step === "login") {
-      setStep("start");
-    } else {
-      setStep("login");
-      setOtp("");
-    }
+    setStep("login");
+    setOtp("");
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.root, { backgroundColor: bg }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-      <SafeAreaView style={styles.root}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Back */}
-          <Animated.View entering={FadeInDown.duration(400)}>
-            <TouchableOpacity
-              onPress={onBack}
-              style={[styles.backBtn, { backgroundColor: surface, borderColor: borderDefault }]}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={18} color={isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.5)"} strokeWidth={2} />
+    <AuthScreen>
+      {step === "login" && (
+        <View style={authStyles.section}>
+          <Text style={authStyles.heading}>Hi There!</Text>
+          <Text style={[authStyles.subtitle, { marginBottom: 27 }]}>Please enter your details to log in.</Text>
+
+          <GoogleButton onPress={onGoogle} disabled={loading} loading={loading} />
+          <AuthDivider />
+
+          <TextInput
+            accessibilityLabel="Email address"
+            style={[authStyles.field, focused === "email" && authStyles.fieldFocused]}
+            placeholder="Email address"
+            placeholderTextColor={AUTH_PLACEHOLDER}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            editable={!loading}
+            onFocus={() => setFocused("email")}
+            onBlur={() => setFocused(null)}
+          />
+          <View style={[authStyles.fieldRow, authStyles.fieldGap, focused === "password" && authStyles.fieldFocused]}>
+            <TextInput
+              accessibilityLabel="Password"
+              style={authStyles.fieldInner}
+              placeholder="Password"
+              placeholderTextColor={AUTH_PLACEHOLDER}
+              secureTextEntry={!showPass}
+              value={password}
+              onChangeText={setPassword}
+              editable={!loading}
+              onFocus={() => setFocused("password")}
+              onBlur={() => setFocused(null)}
+            />
+            <TouchableOpacity accessibilityLabel={showPass ? "Hide password" : "Show password"} onPress={() => setShowPass(!showPass)}>
+              {showPass ? <EyeOff size={18} color="#B6BECD" /> : <Eye size={18} color="#B6BECD" />}
             </TouchableOpacity>
-          </Animated.View>
+          </View>
 
-          {/* ── STEP: start (minimal: choose Google or email) ───────────── */}
-          {step === "start" && (
-            <>
-              <Animated.View entering={FadeInDown.delay(80).duration(500)} style={styles.headlineBlock}>
-                <View style={styles.logoRow}>
-                  <Image source={require("../../assets/images/icon.png")} style={styles.logo} resizeMode="contain" />
-                </View>
-                <Text style={[styles.headline, { color: textColor }]}>Welcome{"\n"}back.</Text>
-                <Text style={[styles.sub, { color: subColor }]}>Sign in to your SplitEase account</Text>
-              </Animated.View>
+          <TouchableOpacity
+            style={{ alignSelf: "flex-end", paddingVertical: 16 }}
+            onPress={() => { setStep("forgot"); setForgotEmail(email); }}
+          >
+            <Text style={authStyles.smallLink}>Forgot Password?</Text>
+          </TouchableOpacity>
 
-              <Animated.View entering={FadeInDown.delay(160).duration(500)} style={styles.form}>
-                <TouchableOpacity
-                  style={[styles.googleBtn, { backgroundColor: surface, borderColor: borderDefault }]}
-                  onPress={onGoogle}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.googleIconBox}>
-                    {loading ? <Loader size={20} color={accent} /> : <GoogleIcon size={20} />}
-                  </View>
-                  <Text style={[styles.googleBtnText, { color: isDark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.65)" }]}>
-                    Continue with Google
-                  </Text>
-                </TouchableOpacity>
+          <GradientButton onPress={onRequestOtp} disabled={loading} loading={loading}>Log In</GradientButton>
+          <View style={authStyles.switchRow}>
+            <Text style={authStyles.switchPrompt}>Create an account? </Text>
+            <Text style={authStyles.switchLink} onPress={() => !loading && router.replace("/auth/register")}>Sign Up</Text>
+          </View>
+        </View>
+      )}
 
-                <TouchableOpacity
-                  style={[styles.googleBtn, { backgroundColor: surface, borderColor: borderDefault }]}
-                  onPress={() => setStep("login")}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.googleIconBox}>
-                    <Mail size={20} color={accent} />
-                  </View>
-                  <Text style={[styles.googleBtnText, { color: isDark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.65)" }]}>
-                    Continue with email
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
-
-              <Animated.View entering={FadeInDown.delay(240).duration(500)} style={styles.footer}>
-                <Text style={[styles.footerText, { color: isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)" }]}>
-                  {"Don't have an account?  "}
-                  <Text style={[styles.footerLink, { color: accent }]} onPress={() => !loading && router.push("/auth/register")}>
-                    Register
-                  </Text>
-                </Text>
-              </Animated.View>
-            </>
-          )}
-
-          {/* ── STEP: login ─────────────────────────────────────────────── */}
-          {step === "login" && (
-            <>
-              <Animated.View entering={FadeInDown.delay(80).duration(500)} style={styles.headlineBlock}>
-                <View style={styles.logoRow}>
-                  <Image source={require("../../assets/images/icon.png")} style={styles.logo} resizeMode="contain" />
-                </View>
-                <Text style={[styles.headline, { color: textColor }]}>Welcome{"\n"}back.</Text>
-                <Text style={[styles.sub, { color: subColor }]}>Sign in to your SplitEase account</Text>
-              </Animated.View>
-
-              <Animated.View entering={FadeInDown.delay(160).duration(500)} style={styles.form}>
-                <View style={styles.fieldBlock}>
-                  <Text style={[styles.label, { color: labelColor }]}>Email address</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: surface, color: textColor, borderColor: focused === "email" ? borderFocus : borderDefault }]}
-                    placeholder="you@example.com"
-                    placeholderTextColor={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"}
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    editable={!loading}
-                    onFocus={() => setFocused("email")}
-                    onBlur={() => setFocused(null)}
-                  />
-                </View>
-
-                <View style={styles.fieldBlock}>
-                  <View style={styles.labelRow}>
-                    <Text style={[styles.label, { color: labelColor }]}>Password</Text>
-                    <Text
-                      style={[styles.forgotLink, { color: accent }]}
-                      onPress={() => { setStep("forgot"); setForgotEmail(email); }}
-                    >
-                      Forgot?
-                    </Text>
-                  </View>
-                  <View style={[styles.inputRow, { backgroundColor: surface, borderColor: focused === "password" ? borderFocus : borderDefault }]}>
-                    <TextInput
-                      style={[styles.inputInner, { color: textColor }]}
-                      placeholder="••••••••"
-                      placeholderTextColor={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"}
-                      secureTextEntry={!showPass}
-                      value={password}
-                      onChangeText={setPassword}
-                      editable={!loading}
-                      onFocus={() => setFocused("password")}
-                      onBlur={() => setFocused(null)}
-                    />
-                    <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-                      {showPass
-                        ? <EyeOff size={18} color={isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)"} />
-                        : <Eye size={18} color={isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)"} />}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: accent, opacity: loading ? 0.65 : 1 }]}
-                  onPress={onRequestOtp}
-                  disabled={loading}
-                  activeOpacity={0.85}
-                >
-                  {loading ? <Loader size={20} color="#fff" /> : <Text style={styles.primaryBtnText}>Continue</Text>}
-                </TouchableOpacity>
-              </Animated.View>
-
-              <Animated.View entering={FadeInDown.delay(240).duration(500)} style={styles.footer}>
-                <Text style={[styles.footerText, { color: isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)" }]}>
-                  {"Don't have an account?  "}
-                  <Text style={[styles.footerLink, { color: accent }]} onPress={() => !loading && router.push("/auth/register")}>
-                    Register
-                  </Text>
-                </Text>
-              </Animated.View>
-            </>
-          )}
-
-          {/* ── STEP: otp ───────────────────────────────────────────────── */}
-          {step === "otp" && (
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.form}>
-              <View style={styles.stepIconWrap}>
-                <View style={[styles.stepIconCircle, { backgroundColor: accent + "1A" }]}>
-                  <ShieldCheck size={26} color={accent} />
-                </View>
+      {step === "otp" && (
+        <View style={authStyles.section}>
+          <View style={{ alignItems: "center", marginBottom: 20 }}><ShieldCheck size={38} color="#83DCF6" /></View>
+          <Text style={authStyles.heading}>Verify it’s you</Text>
+          <Text style={authStyles.subtitle}>Enter the 6-digit code sent to {email}</Text>
+          <TouchableOpacity activeOpacity={1} onPress={() => otpRef.current?.focus()} style={authStyles.otpRow}>
+            {Array.from({ length: OTP_LENGTH }).map((_, i) => (
+              <View key={i} style={[authStyles.otpCell, { borderColor: i === otp.length ? "#82DDF5" : "rgba(255,255,255,0.08)" }]}>
+                <Text style={authStyles.otpDigit}>{otp[i] || ""}</Text>
               </View>
-              <Text style={[styles.headlineSm, { color: textColor }]}>Verify it{"'"}s you</Text>
-              <Text style={[styles.sub, { color: subColor, textAlign: "center" }]}>
-                We sent a 6-digit code to{"\n"}
-                <Text style={{ color: textColor, fontWeight: "700" }}>{email}</Text>
-              </Text>
+            ))}
+          </TouchableOpacity>
+          <TextInput
+            ref={otpRef}
+            value={otp}
+            onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, "").slice(0, OTP_LENGTH))}
+            keyboardType="number-pad"
+            autoFocus
+            maxLength={OTP_LENGTH}
+            style={authStyles.hiddenInput}
+          />
+          <GradientButton onPress={onVerifyOtp} disabled={otpLoading || otp.length < OTP_LENGTH} loading={otpLoading}>Verify & Sign in</GradientButton>
+          <Text style={authStyles.backLink} onPress={resendCooldown > 0 ? undefined : onResendOtp}>
+            {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+          </Text>
+          <Text style={authStyles.backLink} onPress={onBack}>Use a different account</Text>
+        </View>
+      )}
 
-              {/* OTP cells */}
-              <TouchableOpacity activeOpacity={1} onPress={() => otpRef.current?.focus()} style={styles.otpRow}>
-                {Array.from({ length: OTP_LENGTH }).map((_, i) => {
-                  const char = otp[i] || "";
-                  const isActive = i === otp.length;
-                  return (
-                    <View
-                      key={i}
-                      style={[
-                        styles.otpCell,
-                        { backgroundColor: surface, borderColor: isActive ? accent : borderDefault },
-                      ]}
-                    >
-                      <Text style={[styles.otpCellText, { color: textColor }]}>{char}</Text>
-                    </View>
-                  );
-                })}
-              </TouchableOpacity>
-              <TextInput
-                ref={otpRef}
-                value={otp}
-                onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, "").slice(0, OTP_LENGTH))}
-                keyboardType="number-pad"
-                autoFocus
-                maxLength={OTP_LENGTH}
-                style={styles.hiddenInput}
-              />
+      {step === "forgot" && (
+        <View style={authStyles.section}>
+          <Text style={authStyles.heading}>Reset password</Text>
+          <Text style={[authStyles.subtitle, { marginBottom: 28 }]}>Enter your account email and we’ll send you a secure reset link.</Text>
+          <TextInput
+            accessibilityLabel="Account email address"
+            style={[authStyles.field, focused === "forgot" && authStyles.fieldFocused]}
+            placeholder="Email address"
+            placeholderTextColor={AUTH_PLACEHOLDER}
+            value={forgotEmail}
+            onChangeText={setForgotEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            editable={!forgotLoading}
+            onFocus={() => setFocused("forgot")}
+            onBlur={() => setFocused(null)}
+          />
+          <View style={{ marginTop: 20 }}>
+            <GradientButton onPress={onForgotSubmit} disabled={forgotLoading} loading={forgotLoading}>Send reset link</GradientButton>
+          </View>
+          <Text style={authStyles.backLink} onPress={onBack}>Back to log in</Text>
+        </View>
+      )}
 
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: accent, opacity: otpLoading || otp.length < OTP_LENGTH ? 0.6 : 1 }]}
-                onPress={onVerifyOtp}
-                disabled={otpLoading || otp.length < OTP_LENGTH}
-                activeOpacity={0.85}
-              >
-                {otpLoading ? <Loader size={20} color="#fff" /> : <Text style={styles.primaryBtnText}>Verify & Sign in</Text>}
-              </TouchableOpacity>
-
-              <View style={styles.resendRow}>
-                {resendCooldown > 0 ? (
-                  <Text style={[styles.resendMuted, { color: subColor }]}>Resend code in {resendCooldown}s</Text>
-                ) : (
-                  <Text style={[styles.resendLink, { color: accent }]} onPress={onResendOtp}>Resend code</Text>
-                )}
-              </View>
-
-              <Text style={[styles.backToLogin, { color: subColor }]} onPress={() => { setStep("login"); setOtp(""); }}>
-                Use a different account
-              </Text>
-            </Animated.View>
-          )}
-
-          {/* ── STEP: forgot ────────────────────────────────────────────── */}
-          {step === "forgot" && (
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.form}>
-              <Text style={[styles.headlineSm, { color: textColor }]}>Reset password</Text>
-              <Text style={[styles.sub, { color: subColor }]}>
-                Enter your account email and we{"'"}ll send you a secure reset link.
-              </Text>
-
-              <View style={styles.fieldBlock}>
-                <Text style={[styles.label, { color: labelColor }]}>Email address</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: surface, color: textColor, borderColor: focused === "forgot" ? borderFocus : borderDefault }]}
-                  placeholder="you@example.com"
-                  placeholderTextColor={isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"}
-                  value={forgotEmail}
-                  onChangeText={setForgotEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  editable={!forgotLoading}
-                  onFocus={() => setFocused("forgot")}
-                  onBlur={() => setFocused(null)}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: accent, opacity: forgotLoading ? 0.65 : 1 }]}
-                onPress={onForgotSubmit}
-                disabled={forgotLoading}
-                activeOpacity={0.85}
-              >
-                {forgotLoading ? <Loader size={20} color="#fff" /> : <Text style={styles.primaryBtnText}>Send reset link</Text>}
-              </TouchableOpacity>
-
-              <Text style={[styles.backToLogin, { color: subColor }]} onPress={() => setStep("login")}>
-                Back to sign in
-              </Text>
-            </Animated.View>
-          )}
-
-          {/* ── STEP: forgotSent ────────────────────────────────────────── */}
-          {step === "forgotSent" && (
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.form}>
-              <View style={styles.stepIconWrap}>
-                <View style={[styles.stepIconCircle, { backgroundColor: "#10B98119" }]}>
-                  <MailCheck size={26} color="#10B981" />
-                </View>
-              </View>
-              <Text style={[styles.headlineSm, { color: textColor }]}>Check your email</Text>
-              <Text style={[styles.sub, { color: subColor, textAlign: "center" }]}>
-                If an account exists for{"\n"}
-                <Text style={{ color: textColor, fontWeight: "700" }}>{forgotEmail}</Text>
-                {"\n"}you{"'"}ll receive a reset link shortly. The link expires in 15 minutes.
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: accent }]}
-                onPress={() => setStep("login")}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryBtnText}>Back to sign in</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+      {step === "forgotSent" && (
+        <View style={authStyles.section}>
+          <View style={{ alignItems: "center", marginBottom: 20 }}><MailCheck size={38} color="#83DCF6" /></View>
+          <Text style={authStyles.heading}>Check your email</Text>
+          <Text style={[authStyles.subtitle, { marginBottom: 28 }]}>
+            If an account exists for {forgotEmail}, you’ll receive a reset link shortly. The link expires in 15 minutes.
+          </Text>
+          <GradientButton onPress={onBack}>Back to log in</GradientButton>
+        </View>
+      )}
+    </AuthScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 16, paddingBottom: 40 },
-
-  backBtn: {
-    width: 40, height: 40, borderRadius: 12, borderWidth: 1,
-    justifyContent: "center", alignItems: "center", marginBottom: 40,
-  },
-
-  headlineBlock: { marginTop: 12, marginBottom: 40, gap: 8, alignItems: "center" },
-  logoRow: { marginBottom: 6 },
-  logo: { width: 52, height: 52, borderRadius: 13 },
-  headline: { fontSize: 32, fontWeight: "800", letterSpacing: -1, lineHeight: 38, textAlign: "center" },
-  headlineSm: { fontSize: 28, fontWeight: "800", letterSpacing: -1, textAlign: "center", marginBottom: 4 },
-  sub: { fontSize: 14, fontWeight: "400", lineHeight: 20, textAlign: "center" },
-
-  form: { gap: 20 },
-  fieldBlock: { gap: 8 },
-  labelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  forgotLink: { fontSize: 12, fontWeight: "700" },
-  label: { fontSize: 12, fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase" },
-  input: { height: 56, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 18, fontSize: 15, fontWeight: "400" },
-  inputRow: { height: 56, borderRadius: 14, borderWidth: 1.5, flexDirection: "row", alignItems: "center", paddingHorizontal: 18 },
-  inputInner: { flex: 1, fontSize: 15, fontWeight: "400" },
-  eyeBtn: { paddingLeft: 12 },
-
-  primaryBtn: {
-    height: 56, borderRadius: 14, justifyContent: "center", alignItems: "center", marginTop: 4,
-    shadowColor: INDIGO, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8,
-  },
-  primaryBtnText: { color: "#ffffff", fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
-
-  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  dividerLine: { flex: 1, height: 1 },
-  dividerText: { fontSize: 12, fontWeight: "500" },
-
-  googleBtn: {
-    height: 56, borderRadius: 14, borderWidth: 1.5, flexDirection: "row",
-    alignItems: "center", justifyContent: "center", gap: 12,
-  },
-  googleIconBox: { width: 22, height: 22, justifyContent: "center", alignItems: "center" },
-  googleBtnText: { fontSize: 15, fontWeight: "600" },
-
-  footer: { marginTop: 36, alignItems: "center" },
-  footerText: { fontSize: 14, fontWeight: "400" },
-  footerLink: { fontWeight: "700" },
-
-  // OTP
-  stepIconWrap: { alignItems: "center", marginBottom: 4 },
-  stepIconCircle: { width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center" },
-  otpRow: { flexDirection: "row", justifyContent: "space-between", gap: 8, marginTop: 4 },
-  otpCell: {
-    flex: 1, height: 58, borderRadius: 12, borderWidth: 1.5,
-    justifyContent: "center", alignItems: "center",
-  },
-  otpCellText: { fontSize: 24, fontWeight: "700" },
-  hiddenInput: { position: "absolute", width: 1, height: 1, opacity: 0 },
-  resendRow: { alignItems: "center", marginTop: -6 },
-  resendMuted: { fontSize: 13 },
-  resendLink: { fontSize: 13, fontWeight: "700" },
-  backToLogin: { textAlign: "center", fontSize: 14, fontWeight: "500", marginTop: 4 },
-});
