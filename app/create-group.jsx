@@ -1,77 +1,181 @@
+import { useBottomSpacing } from "@/hooks/useSafeSpacing";
+import { Alert } from "@/lib/alert";
+import { SCREEN_GUTTER } from "@/constants/layout";
+import GroupIconPicker from "@/components/GroupIconPicker";
 import InviteModal from "@/components/InviteModal";
-import { Loader } from "@/components/Loader";
-import { useTheme } from "@/context/ThemeContext";
+import PeoplePicker from "@/components/people/PeoplePicker";
+import GroupTypeIcon from "@/components/group/GroupTypeIcon";
+import { PillButton, PillInput, ScreenHeader, useDesign } from "@/components/ui/Design";
 import { api } from "@/lib/api";
-import { LinearGradient } from "expo-linear-gradient";
+import { getGroupIcon } from "@/lib/groupIcons";
+import { CURRENCIES, GROUP_TYPES, PRIMARY_GROUP_TYPES, groupTypeMeta, suggestGroupName } from "@/lib/groupPresets";
+import { addPeopleToGroup, describeAddResult } from "@/lib/people";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import {
-    ArrowLeft,
-    Check,
-    Sparkles,
-    Users,
-} from "lucide-react-native";
+import { CalendarDays, Camera, ChevronRight, Receipt, Sparkles, Wallet } from "lucide-react-native";
 import { useState } from "react";
 import {
-    Alert,
+    Image,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
     StatusBar,
     StyleSheet,
-    Text,
-    TextInput,
+    Switch,
     TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const MAX = 60;
-const GROUP_TYPE = "general";
-const GROUP_TINT = "#6366F1";
-const GROUP_GRADIENT = ["#4338CA", "#7C3AED"];
-const SUGGESTIONS = ["Friends & Family", "Weekend Plans", "Home Expenses", "Office Team"];
+// New groups are Roommates unless the user picks something else.
+const DEFAULT_TYPE = "roommate";
+const QUICK_ICONS = {
+    roommate: ["home", "building2", "shoppingCart", "utensils", "coffee", "sparkles"],
+    trip: ["plane", "mountain", "car", "treePine", "camera", "mapPin"],
+    business: ["briefcase", "building2", "wallet", "trainFront", "coffee", "sparkles"],
+    general: ["users", "partyPopper", "utensils", "gift", "gamepad2", "sparkles"],
+};
 
 const tap = () => {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
 };
+const toYmd = (d) => (d ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : null);
+const fmtDay = (d) => (d ? d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) : null);
 
+/**
+ * 3-step create flow (same as web):
+ *   1. What's it for - Roommates / Trip / Business / Other
+ *   2. Name, photo or icon, and the type's details (dates, budget, bill day…)
+ *   3. Add people - contacts by name, anyone else by full email (invite). Skippable.
+ * Then the invite-link sheet, then the group.
+ */
 export default function CreateGroupScreen() {
-    const { colors, theme } = useTheme();
-    const isDark = theme === "dark";
-    const styles = getStyles(colors, isDark);
+    const { colors, isDark, t } = useDesign();
+    const footerBottomPadding = useBottomSpacing(16);
+    const styles = getStyles(colors, isDark, t);
 
+    const [step, setStep] = useState(0);
+    const [type, setType] = useState(null);
     const [name, setName] = useState("");
     const [error, setError] = useState("");
+    const [icon, setIcon] = useState(null);
+    const [showAllIcons, setShowAllIcons] = useState(false);
+    const [photo, setPhoto] = useState(null); // { uri, base64 }
+    const [startDate, setStartDate] = useState(null);
+    const [endDate, setEndDate] = useState(null);
+    const [datePicker, setDatePicker] = useState(null); // "start" | "end" | null
+    const [budget, setBudget] = useState("");
+    const [currency, setCurrency] = useState("INR");
+    const [billDay, setBillDay] = useState(null);
+    const [receiptRequired, setReceiptRequired] = useState(false);
+    const [splitMode, setSplitMode] = useState("equal"); // "equal" | "shares"
+    const [selected, setSelected] = useState([]);
     const [creating, setCreating] = useState(false);
     const [createdId, setCreatedId] = useState(null);
-    const [focused, setFocused] = useState(false);
 
+    const meta = groupTypeMeta(type);
     const trimmed = name.trim();
-    const letter = trimmed ? trimmed.charAt(0).toUpperCase() : "G";
+    const PreviewIcon = getGroupIcon(icon) || meta.Icon;
 
-    const validate = () => {
+    const pickType = (key) => {
+        tap();
+        setType(key);
+        setIcon(GROUP_TYPES[key].icon);
+        if (!trimmed) setName(suggestGroupName(key));
+        setStep(1);
+    };
+
+    const validateDetails = () => {
         if (!trimmed) return "Please name your group.";
         if (trimmed.length < 2) return "Use at least 2 characters.";
         if (trimmed.length > MAX) return `Keep it under ${MAX} characters.`;
+        if (startDate && endDate && endDate < startDate) return "End date can't be before the start date.";
+        if (budget && !(Number(budget) > 0)) return "Budget must be a positive amount.";
         return "";
     };
 
-    const pickSuggestion = (s) => {
-        tap();
-        setName(s);
+    const goToPeople = () => {
+        const v = validateDetails();
+        if (v) { setError(v); return; }
         setError("");
+        setStep(2);
+    };
+
+    const pickPhoto = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+            base64: true,
+        });
+        if (!result.canceled && result.assets[0]) {
+            const a = result.assets[0];
+            setPhoto({ uri: a.uri, base64: `data:${a.mimeType || "image/jpeg"};base64,${a.base64}` });
+        }
+    };
+
+    const onDateChange = (event, date) => {
+        const which = datePicker;
+        if (Platform.OS === "android") setDatePicker(null);
+        if (event?.type === "dismissed" || !date) return;
+        if (which === "start") setStartDate(date);
+        else setEndDate(date);
     };
 
     const createGroup = async () => {
         if (creating) return;
-        const v = validate();
-        if (v) { setError(v); return; }
-        setError("");
+        const v = validateDetails();
+        if (v) { setError(v); setStep(1); return; }
         try {
             setCreating(true);
-            const res = await api.post("/groups", { name: trimmed, groupType: GROUP_TYPE });
-            setCreatedId(res.data._id);
+            const body = { name: trimmed, groupType: type, icon: photo ? null : icon };
+            if (type === "trip") body.trip = { startDate: toYmd(startDate), endDate: toYmd(endDate), budget: budget || null };
+            if (type === "roommate" && billDay) body.roommate = { billDay };
+            if (type === "trip" || type === "business") body.settings = { currency };
+            if (type === "business") body.settings = { ...body.settings, receiptRequired };
+            // How expenses are split is decided here, once - not on every expense.
+            if (splitMode === "shares") body.settings = { ...body.settings, defaultSplit: { type: "shares", weights: [] } };
+
+            const res = await api.post("/groups", body);
+            const groupId = res.data._id;
+            const notes = [];
+
+            // Members and photo use their own endpoints; a failure there
+            // shouldn't lose the group that was already created. They're
+            // independent, so run them in parallel (notes keep their order).
+            const [memberNote, photoNote] = await Promise.all([
+                selected.length
+                    ? addPeopleToGroup(groupId, selected).then(
+                        (r) => describeAddResult(r),
+                        (err) => err?.response?.data?.message || "Adding people failed - try again from the group."
+                    )
+                    : null,
+                photo
+                    ? api.post(`/groups/${groupId}/photo`, { file: photo.base64 }, { timeout: 60000 }).then(
+                        () => null,
+                        () => "The photo didn't upload - you can add it later."
+                    )
+                    : null,
+            ]);
+            if (memberNote) notes.push(memberNote);
+            if (photoNote) notes.push(photoNote);
+            if (notes.length) {
+                Alert.alert("Group created", notes.join("\n"), [
+                    { text: "Cancel", style: "cancel", onPress: () => goToGroupById(groupId) },
+                    { text: "Done", onPress: () => setCreatedId(groupId) },
+                ]);
+            } else {
+                Alert.alert("Group created 🎉", "Your group is ready.", [
+                    { text: "Cancel", style: "cancel", onPress: () => goToGroupById(groupId) },
+                    { text: "Done", onPress: () => setCreatedId(groupId) },
+                ]);
+            }
         } catch (err) {
             const message = err?.response?.data?.message;
             Alert.alert(
@@ -85,126 +189,233 @@ export default function CreateGroupScreen() {
         }
     };
 
-    const goToGroup = () => {
-        const id = createdId;
-        setCreatedId(null);
+    const goToGroupById = (id) => {
         if (id) router.replace({ pathname: "/groups/[id]", params: { id, returnTo: "trips" } });
         else router.back();
     };
 
+    const goToGroup = () => {
+        const id = createdId;
+        setCreatedId(null);
+        goToGroupById(id);
+    };
+
+    const onBack = () => (step > 0 ? setStep(step - 1) : router.back());
+    const title = step === 0 ? "New Group" : step === 1 ? `${meta.label} details` : "Add people";
+
+    const chip = (label, on, onPress, key) => (
+        <TouchableOpacity key={key || label} onPress={() => { tap(); onPress(); }} activeOpacity={0.8}
+            style={[styles.chip, on && { backgroundColor: t.ink, borderColor: t.ink }]}>
+            <Text style={[styles.chipText, on && { color: t.onInk }]}>{label}</Text>
+        </TouchableOpacity>
+    );
+
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-                    <ArrowLeft size={20} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>New Group</Text>
-                <View style={{ width: 36 }} />
-            </View>
+            <ScreenHeader back onBack={onBack} title={title} subtitle={`Step ${step + 1} of 3`} />
 
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-                    {/* Live preview */}
-                    <LinearGradient colors={GROUP_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.preview}>
-                        <View style={styles.previewOrb} />
-                        <View style={styles.previewOrbSmall} />
+                    {/* ── Step 1: type ── */}
+                    {step === 0 && (
+                        <View style={styles.gutter}>
+                            <Text style={styles.lead}>What&apos;s this group for?</Text>
+                            {[...PRIMARY_GROUP_TYPES, "general"].map((key) => {
+                                const g = GROUP_TYPES[key];
+                                const isDefault = key === DEFAULT_TYPE;
+                                return (
+                                    <TouchableOpacity key={key} style={[styles.typeCard, isDefault && { borderColor: colors.text, borderWidth: 1.5 }]}
+                                        onPress={() => pickType(key)} activeOpacity={0.8}
+                                        accessibilityRole="button" accessibilityLabel={`${g.label}${isDefault ? " (default)" : ""}: ${g.tagline}`}>
+                                        <GroupTypeIcon type={key} size={50} />
+                                        <View style={{ flex: 1 }}>
+                                            <View style={styles.titleRow}>
+                                                <Text style={styles.typeTitle}>{g.label}</Text>
+                                                {isDefault ? (
+                                                    <View style={[styles.defaultBadge, { backgroundColor: t.ink }]}>
+                                                        <Text style={[styles.defaultBadgeText, { color: t.onInk }]}>Default</Text>
+                                                    </View>
+                                                ) : null}
+                                            </View>
+                                            <Text style={styles.typeDesc}>{g.tagline}</Text>
+                                        </View>
+                                        <ChevronRight size={18} color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    )}
 
-                        <View style={styles.previewAvatarWrap}>
-                            <View style={styles.previewAvatar}>
-                                <Text style={styles.previewAvatarText}>{letter}</Text>
+                    {/* ── Step 2: details ── */}
+                    {step === 1 && (
+                        <View style={styles.gutter}>
+                            <View style={styles.identity}>
+                                <TouchableOpacity onPress={pickPhoto} activeOpacity={0.85} accessibilityLabel="Add a group photo">
+                                    {photo ? (
+                                        <Image source={{ uri: photo.uri }} style={styles.avatarBig} />
+                                    ) : (
+                                        <LinearGradient colors={meta.accent} style={styles.avatarBig}>
+                                            <PreviewIcon size={30} color="#fff" strokeWidth={2.2} />
+                                        </LinearGradient>
+                                    )}
+                                    <View style={styles.cameraBadge}><Camera size={12} color="#fff" /></View>
+                                </TouchableOpacity>
+                                <View style={{ flex: 1 }}>
+                                    <PillInput
+                                        icon={<Sparkles size={17} color={colors.textSecondary} />}
+                                        value={name}
+                                        onChangeText={(v) => { setName(v.slice(0, MAX)); if (error) setError(""); }}
+                                        placeholder={meta.namePlaceholder}
+                                        returnKeyType="next"
+                                    />
+                                </View>
                             </View>
-                            <View style={styles.previewTypeBadge}>
-                                <Users size={13} color={GROUP_TINT} strokeWidth={2.5} />
+                            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                            {photo ? (
+                                <TouchableOpacity onPress={() => setPhoto(null)}><Text style={styles.linkText}>Remove photo, use an icon</Text></TouchableOpacity>
+                            ) : (
+                                <>
+                                    <View style={styles.chipsRow}>
+                                        {QUICK_ICONS[type].map((k) => {
+                                            const I = getGroupIcon(k);
+                                            if (!I) return null;
+                                            const on = icon === k;
+                                            return (
+                                                <TouchableOpacity key={k} onPress={() => { tap(); setIcon(k); }}
+                                                    style={[styles.iconBtn, on && { backgroundColor: t.ink, borderColor: t.ink }]} accessibilityLabel={k}>
+                                                    <I size={18} color={on ? t.onInk : colors.textSecondary} />
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                        {chip(showAllIcons ? "Less" : "More", false, () => setShowAllIcons((v) => !v), "more")}
+                                    </View>
+                                    {showAllIcons && (
+                                        <View style={{ marginTop: 12 }}>
+                                            <GroupIconPicker value={icon} onChange={setIcon} colors={colors} tint={colors.primary} />
+                                        </View>
+                                    )}
+                                </>
+                            )}
+
+                            {type === "trip" && (
+                                <View style={styles.panel}>
+                                    <View style={styles.panelTitleRow}><CalendarDays size={14} color={colors.primary} /><Text style={styles.panelTitle}>Dates (optional)</Text></View>
+                                    <View style={styles.twoCol}>
+                                        <TouchableOpacity style={styles.dateBtn} onPress={() => setDatePicker("start")}>
+                                            <Text style={[styles.dateText, !startDate && { color: colors.textSecondary }]}>{fmtDay(startDate) || "Start"}</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.dateBtn} onPress={() => setDatePicker("end")}>
+                                            <Text style={[styles.dateText, !endDate && { color: colors.textSecondary }]}>{fmtDay(endDate) || "End"}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    {datePicker && (
+                                        <DateTimePicker
+                                            value={(datePicker === "start" ? startDate : endDate) || startDate || new Date()}
+                                            minimumDate={datePicker === "end" && startDate ? startDate : undefined}
+                                            mode="date"
+                                            display="default"
+                                            onChange={onDateChange}
+                                            themeVariant={isDark ? "dark" : "light"}
+                                        />
+                                    )}
+                                    {Platform.OS === "ios" && datePicker && (
+                                        <TouchableOpacity onPress={() => setDatePicker(null)}><Text style={styles.linkText}>Done</Text></TouchableOpacity>
+                                    )}
+                                    <View style={[styles.panelTitleRow, { marginTop: 14 }]}><Wallet size={14} color={colors.primary} /><Text style={styles.panelTitle}>Budget (optional)</Text></View>
+                                    <PillInput value={budget} onChangeText={(v) => setBudget(v.replace(/[^0-9.]/g, ""))} placeholder="15000" keyboardType="decimal-pad" />
+                                    <Text style={[styles.panelTitle, { marginTop: 14 }]}>Currency</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hChips}>
+                                        {CURRENCIES.map((c) => chip(c, currency === c, () => setCurrency(c)))}
+                                    </ScrollView>
+                                </View>
+                            )}
+
+                            {type === "roommate" && (
+                                <View style={styles.panel}>
+                                    <View style={styles.panelTitleRow}><CalendarDays size={14} color={colors.primary} /><Text style={styles.panelTitle}>Rent / bills due on (optional)</Text></View>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hChips}>
+                                        {chip("Not set", !billDay, () => setBillDay(null), "none")}
+                                        {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => chip(`Day ${d}`, billDay === d, () => setBillDay(d), `d${d}`))}
+                                    </ScrollView>
+                                    <Text style={styles.hint}>Add rent, WiFi and other monthly bills as auto-repeat from the group.</Text>
+                                </View>
+                            )}
+
+                            {type === "business" && (
+                                <View style={styles.panel}>
+                                    <View style={styles.switchRow}>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={styles.panelTitleRow}><Receipt size={14} color={colors.primary} /><Text style={styles.panelTitle}>Receipt required</Text></View>
+                                            <Text style={styles.hint}>Every expense must have a bill photo</Text>
+                                        </View>
+                                        <Switch value={receiptRequired} onValueChange={setReceiptRequired}
+                                            trackColor={{ false: "#E5E7EB", true: colors.primary }} thumbColor="#fff" ios_backgroundColor="#E5E7EB" />
+                                    </View>
+                                    <Text style={[styles.panelTitle, { marginTop: 14 }]}>Currency</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hChips}>
+                                        {CURRENCIES.map((c) => chip(c, currency === c, () => setCurrency(c)))}
+                                    </ScrollView>
+                                </View>
+                            )}
+
+                            {/* Split: chosen once, here - not on every expense */}
+                            <View style={{ marginTop: 6 }}>
+                                <Text style={styles.panelTitle}>How do you split expenses?</Text>
+                                <View style={[styles.twoCol, { marginTop: 8 }]}>
+                                    {[
+                                        { key: "equal", title: "Equally", hint: "Everyone pays the same" },
+                                        { key: "shares", title: "By shares", hint: "Bigger room = 2 shares" },
+                                    ].map((o) => {
+                                        const on = splitMode === o.key;
+                                        return (
+                                            <TouchableOpacity key={o.key} onPress={() => { tap(); setSplitMode(o.key); }} activeOpacity={0.85}
+                                                style={[styles.splitOpt, on && { backgroundColor: t.ink, borderColor: t.ink }]}
+                                                accessibilityState={{ selected: on }}>
+                                                <Text style={[styles.splitTitle, on && { color: t.onInk }]}>{o.title}</Text>
+                                                <Text style={[styles.splitHint, on && { color: t.onInk, opacity: 0.75 }]}>{o.hint}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                                {splitMode === "shares" ? (
+                                    <Text style={[styles.hint, { marginTop: 6 }]}>Everyone starts with 1 share - set each person&apos;s shares in Group settings once they join.</Text>
+                                ) : null}
                             </View>
                         </View>
+                    )}
 
-                        <Text style={styles.previewName} numberOfLines={1}>
-                            {trimmed || "Your group name"}
-                        </Text>
-                        <View style={styles.previewPill}>
-                            <Users size={12} color="#fff" strokeWidth={2.5} />
-                            <Text style={styles.previewPillText}>Group</Text>
+                    {/* ── Step 3: people ── */}
+                    {step === 2 && (
+                        <View style={styles.gutter}>
+                            <PeoplePicker selected={selected} onChange={setSelected} autoFocus={false} />
                         </View>
-                    </LinearGradient>
-
-                    {/* A single universal group replaces the old type picker. */}
-                    <View style={styles.groupIdentity}>
-                        <View style={styles.groupIdentityIcon}>
-                            <Users size={20} color={GROUP_TINT} strokeWidth={2.3} />
-                        </View>
-                        <View style={styles.groupIdentityCopy}>
-                            <Text style={styles.groupIdentityTitle}>Group</Text>
-                            <Text style={styles.groupIdentityDesc}>One place for every shared expense</Text>
-                        </View>
-                        <View style={styles.groupIdentityCheck}>
-                            <Check size={14} color="#fff" strokeWidth={3} />
-                        </View>
-                    </View>
-
-                    {/* Name */}
-                    <Text style={styles.label}>Group name</Text>
-                    <View
-                        style={[
-                            styles.inputWrap,
-                            focused && { borderColor: GROUP_TINT },
-                            error && { borderColor: colors.error },
-                        ]}
-                    >
-                        <Sparkles size={18} color={focused ? GROUP_TINT : colors.textSecondary} />
-                        <TextInput
-                            value={name}
-                            onChangeText={(t) => { setName(t.slice(0, MAX)); if (error) setError(""); }}
-                            placeholder={`e.g. ${SUGGESTIONS[0]}`}
-                            placeholderTextColor={colors.placeholder}
-                            style={styles.input}
-                            selectionColor={GROUP_TINT}
-                            autoFocus
-                            returnKeyType="done"
-                            onFocus={() => setFocused(true)}
-                            onBlur={() => setFocused(false)}
-                            onSubmitEditing={createGroup}
-                        />
-                        <Text style={styles.counter}>{name.length}/{MAX}</Text>
-                    </View>
-                    {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-                    {/* Suggestions */}
-                    <View style={styles.chips}>
-                        {SUGGESTIONS.map((s) => (
-                            <TouchableOpacity
-                                key={s}
-                                style={styles.chip}
-                                onPress={() => pickSuggestion(s)}
-                                activeOpacity={0.75}
-                            >
-                                <Text style={styles.chipText}>{s}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    <View style={styles.hintRow}>
-                        <Users size={14} color={colors.textSecondary} />
-                        <Text style={styles.hint}>You can invite members right after creating.</Text>
-                    </View>
+                    )}
                 </ScrollView>
 
-                {/* Sticky create button */}
-                <View style={styles.footer}>
-                    <TouchableOpacity
-                        onPress={createGroup}
-                        disabled={creating || !trimmed}
-                        activeOpacity={0.9}
-                        style={[styles.createBtn, (creating || !trimmed) && { opacity: 0.5 }]}
-                    >
-                        <LinearGradient colors={GROUP_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.createBtnGrad}>
-                            {creating
-                                ? <Loader size={20} color="#fff" />
-                                : <Text style={styles.createBtnText}>Create Group</Text>}
-                        </LinearGradient>
-                    </TouchableOpacity>
-                </View>
+                {step === 0 && (
+                    <View style={[styles.footer, { paddingBottom: footerBottomPadding }]}>
+                        <PillButton variant="primary" onPress={() => pickType(DEFAULT_TYPE)}
+                            label={`Continue with ${GROUP_TYPES[DEFAULT_TYPE].label}`} />
+                    </View>
+                )}
+                {step > 0 && (
+                    <View style={[styles.footer, { paddingBottom: footerBottomPadding }]}>
+                        {step === 1 ? (
+                            <PillButton variant="primary" onPress={goToPeople} disabled={!trimmed} label="Next" />
+                        ) : (
+                            <View style={styles.twoCol}>
+                                {!selected.length && (
+                                    <PillButton variant="secondary" onPress={createGroup} disabled={creating} label="Skip for now" style={{ flex: 1 }} />
+                                )}
+                                <PillButton variant="primary" onPress={createGroup} loading={creating} disabled={creating}
+                                    label={selected.length ? `Create & add ${selected.length}` : "Create group"} style={{ flex: 1 }} />
+                            </View>
+                        )}
+                    </View>
+                )}
             </KeyboardAvoidingView>
 
             <InviteModal groupId={createdId} visible={!!createdId} onClose={goToGroup} />
@@ -212,88 +423,63 @@ export default function CreateGroupScreen() {
     );
 }
 
-const getStyles = (colors, isDark) => StyleSheet.create({
+const getStyles = (colors, isDark, t) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-        paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border,
-    },
-    backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-    headerTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
-    scroll: { padding: 16, paddingBottom: 30 },
+    scroll: { paddingTop: 4, paddingBottom: 30 },
+    gutter: { paddingHorizontal: SCREEN_GUTTER, gap: 12 },
+    lead: { fontSize: 15, color: colors.textSecondary, marginBottom: 4 },
 
-    preview: {
-        borderRadius: 20, paddingVertical: 30, alignItems: "center", overflow: "hidden", marginBottom: 26,
+    typeCard: {
+        flexDirection: "row", alignItems: "center", gap: 14, padding: 14, paddingVertical: 16, borderRadius: 22,
+        backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
     },
-    previewOrb: {
-        position: "absolute", top: -50, right: -35, width: 160, height: 160, borderRadius: 80,
-        backgroundColor: "rgba(255,255,255,0.12)",
-    },
-    previewOrbSmall: {
-        position: "absolute", bottom: -30, left: -20, width: 100, height: 100, borderRadius: 50,
-        backgroundColor: "rgba(255,255,255,0.08)",
-    },
-    previewAvatarWrap: { width: 76, height: 76 },
-    previewAvatar: {
-        width: 76, height: 76, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.22)",
-        alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "rgba(255,255,255,0.32)",
-    },
-    previewAvatarText: { fontSize: 36, fontWeight: "900", color: "#fff" },
-    previewTypeBadge: {
-        position: "absolute", bottom: -6, right: -6, width: 28, height: 28, borderRadius: 14,
-        backgroundColor: "#fff", alignItems: "center", justifyContent: "center",
-        borderWidth: 2, borderColor: "rgba(255,255,255,0.5)",
-    },
-    previewName: { fontSize: 20, fontWeight: "800", color: "#fff", marginTop: 16, maxWidth: "82%" },
-    previewPill: {
-        flexDirection: "row", alignItems: "center", gap: 5,
-        marginTop: 8, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
-        backgroundColor: "rgba(255,255,255,0.22)",
-    },
-    previewPillText: { fontSize: 11.5, fontWeight: "700", color: "#fff", letterSpacing: 0.3 },
+    titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    defaultBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    defaultBadgeText: { fontSize: 10, fontWeight: "700" },
+    typeTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+    typeDesc: { fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
 
-    label: { fontSize: 12, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, marginLeft: 2 },
+    identity: { flexDirection: "row", alignItems: "center", gap: 14 },
+    avatarBig: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+    cameraBadge: {
+        position: "absolute", right: -4, bottom: -4, width: 24, height: 24, borderRadius: 12,
+        backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center",
+    },
+    errorText: { color: colors.error, fontSize: 12.5 },
+    linkText: { color: colors.primary, fontSize: 13, fontWeight: "600", paddingVertical: 4 },
 
-    groupIdentity: {
-        flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 24,
-        padding: 14, borderRadius: 16, borderWidth: 1,
-        borderColor: isDark ? "rgba(129,140,248,0.24)" : "rgba(99,102,241,0.16)",
-        backgroundColor: isDark ? "rgba(99,102,241,0.10)" : "rgba(99,102,241,0.055)",
+    chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
+    iconBtn: {
+        width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center",
+        borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline, backgroundColor: t.surface,
     },
-    groupIdentityIcon: {
-        width: 44, height: 44, borderRadius: 14,
-        backgroundColor: isDark ? "rgba(129,140,248,0.16)" : "rgba(99,102,241,0.10)",
-        alignItems: "center", justifyContent: "center",
-    },
-    groupIdentityCopy: { flex: 1 },
-    groupIdentityTitle: { color: colors.text, fontSize: 15.5, fontWeight: "800", letterSpacing: -0.2 },
-    groupIdentityDesc: { color: colors.textSecondary, fontSize: 12.5, marginTop: 3 },
-    groupIdentityCheck: {
-        width: 26, height: 26, borderRadius: 13, backgroundColor: GROUP_TINT,
-        alignItems: "center", justifyContent: "center",
-    },
-
-    inputWrap: {
-        flexDirection: "row", alignItems: "center", gap: 10, height: 54, borderRadius: 14,
-        backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: 14,
-    },
-    input: { flex: 1, fontSize: 16, fontWeight: "600", color: colors.text },
-    counter: { fontSize: 11, color: colors.textSecondary, fontWeight: "600" },
-    errorText: { color: colors.error, fontSize: 12.5, marginTop: 6, marginLeft: 2 },
-
-    chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
     chip: {
-        borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-        backgroundColor: isDark ? "rgba(129,140,248,0.10)" : "rgba(99,102,241,0.06)",
-        borderColor: isDark ? "rgba(129,140,248,0.22)" : "rgba(99,102,241,0.15)",
+        paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline, backgroundColor: t.surface,
     },
-    chipText: { fontSize: 12.5, fontWeight: "600", color: isDark ? "#A5B4FC" : "#4F46E5" },
+    chipText: { fontSize: 13, fontWeight: "600", color: colors.text },
+    hChips: { gap: 8, paddingVertical: 2 },
 
-    hintRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 22, justifyContent: "center" },
-    hint: { fontSize: 12.5, color: colors.textSecondary },
+    panel: {
+        marginTop: 6, padding: 14, borderRadius: 22, gap: 8,
+        backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
+    },
+    panelTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+    panelTitle: { fontSize: 13, fontWeight: "700", color: colors.text },
+    hint: { fontSize: 12, color: colors.textSecondary },
+    twoCol: { flexDirection: "row", gap: 10 },
+    dateBtn: {
+        flex: 1, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center",
+        backgroundColor: t.surfaceAlt,
+    },
+    dateText: { fontSize: 14.5, fontWeight: "600", color: colors.text },
+    switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+    splitOpt: {
+        flex: 1, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 18,
+        backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
+    },
+    splitTitle: { fontSize: 14.5, fontWeight: "700", color: colors.text },
+    splitHint: { fontSize: 11.5, color: colors.textSecondary, marginTop: 2 },
 
-    footer: { padding: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background },
-    createBtn: { borderRadius: 14, overflow: "hidden" },
-    createBtnGrad: { height: 54, alignItems: "center", justifyContent: "center" },
-    createBtnText: { color: "#fff", fontSize: 16, fontWeight: "800", letterSpacing: 0.2 },
+    footer: { paddingTop: 14, paddingHorizontal: SCREEN_GUTTER, backgroundColor: colors.background },
 });

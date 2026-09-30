@@ -1,14 +1,19 @@
-import { View, Text, StyleSheet } from "react-native";
+import { useDesign } from "@/components/ui/Design";
+import { Text } from "@/components/ui/Typography";
+import { StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ModalScreen() {
+  const { colors } = useDesign();
+  const styles = getStyles(colors);
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <Text style={styles.text}>This is a modal screen</Text>
-    </View>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center" },
-  text: { fontSize: 18, fontWeight: "600" },
+const getStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background },
+  text: { fontSize: 18, fontWeight: "600", color: colors.text },
 });

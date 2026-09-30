@@ -94,7 +94,16 @@
         {
           "icon": "./assets/images/android-icon-monochrome.png",
           "color": "#4f46e5",
-          "sounds": ["./assets/sounds/notification.wav"]
+          "sounds": [
+            "./assets/sounds/notification.wav"
+          ]
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SplitEase uses your photo library when you choose a profile photo, receipt, or chat attachment.",
+          "cameraPermission": "SplitEase uses your camera so you can take a photo and send it in a chat, or snap a receipt."
         }
       ],
       "expo-secure-store",
@@ -106,18 +115,19 @@
           "widgets": [
             {
               "name": "SplitEaseBalance",
-              "label": "SplitEase Balance",
-              "description": "See what you owe and what others owe you, then tap to open SplitEase.",
+              "label": "SplitEase",
+              "description": "Your balance or a custom amount on the home screen — pick a design in the app.",
               "minWidth": "250dp",
               "minHeight": "110dp",
               "targetCellWidth": 4,
               "targetCellHeight": 2,
-              "resizeMode": "horizontal",
+              "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
             }
           ]
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

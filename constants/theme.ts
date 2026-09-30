@@ -5,8 +5,10 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#6366F1'; // Matches the primary indigo used
-const tintColorDark = '#818CF8';
+// Default theme = the Messages screen look: monochrome "ink" accents.
+// Light: black accent, white text on it. Dark: white accent, black text on it.
+const tintColorLight = '#141414';
+const tintColorDark = '#FFFFFF';
 
 export const Colors = {
   light: {
@@ -21,8 +23,9 @@ export const Colors = {
 
     // Brand
     tint: tintColorLight,
-    primary: '#6366F1',
-    primaryLight: '#E0E7FF', // Light indigo for backgrounds
+    primary: '#141414',
+    onPrimary: '#FFFFFF', // text / icons placed ON a primary-coloured fill
+    primaryLight: 'rgba(20,20,20,0.06)', // soft tint for chips, icon boxes, selected rows
 
     // Feedback
     error: '#EF4444',
@@ -41,19 +44,20 @@ export const Colors = {
     placeholder: '#9CA3AF',
   },
   dark: {
-    // Basics
-    text: '#ECEDEE', // Light gray/white
-    textSecondary: '#9CA3AF',
-    background: '#111827', // Dark gray/black
+    // Basics — a true black theme so it looks bold and applies cleanly everywhere.
+    text: '#FFFFFF',
+    textSecondary: '#A1A1AA',
+    background: '#000000',
 
     // Components
-    card: '#1F2937', // Slightly lighter dark for cards
-    border: '#374151',
+    card: '#121214',
+    border: 'rgba(255,255,255,0.08)',
 
     // Brand
     tint: tintColorDark,
-    primary: '#818CF8', // Lighter indigo for dark mode
-    primaryLight: '#312E81', // Darker indigo for backgrounds
+    primary: '#FFFFFF',
+    onPrimary: '#141414',
+    primaryLight: 'rgba(255,255,255,0.10)',
 
     // Feedback
     error: '#F87171',
@@ -63,13 +67,13 @@ export const Colors = {
     warning: '#FBBF24',
 
     // Tab Bar (Existing)
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: '#9EAEC5',
+    tabIconDefault: '#9EAEC5',
     tabIconSelected: tintColorDark,
 
     // Specifics
-    inputBackground: '#374151',
-    placeholder: '#6B7280',
+    inputBackground: '#121214',
+    placeholder: '#71717A',
   },
 };
 

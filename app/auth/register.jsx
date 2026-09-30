@@ -1,21 +1,21 @@
 import { useAuth } from "@/context/AuthContext";
+import { Alert } from "@/lib/alert";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
 import { useGoogleAuth } from "@/lib/googleAuth";
 import { redirectAfterAuth } from "@/lib/pendingInvite";
-import { AUTH_PLACEHOLDER, AuthDivider, AuthScreen, GoogleButton, GradientButton, authStyles } from "@/components/AuthScreenUI";
+import { AuthDivider, AuthScreen, GoogleButton, GradientButton, useAuthStyles } from "@/components/AuthScreenUI";
+import { PillInput, useDesign } from "@/components/ui/Design";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { signInWithCustomToken } from "firebase/auth";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    TouchableOpacity,
+    View,
 } from "react-native";
+import { Text, TextInput } from "@/components/ui/Typography";
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
@@ -32,6 +32,8 @@ const getStoredReferralCode = async () => {
 export default function RegisterScreen() {
   const { saveToken } = useAuth();
   const { signIn: googleSignIn } = useGoogleAuth();
+  const authStyles = useAuthStyles();
+  const { colors } = useDesign();
   // The registration route opens on the form; OTP is the next step after submitting it.
   const [step, setStep] = useState("form");
   const [name, setName] = useState("");
@@ -39,7 +41,6 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [focused, setFocused] = useState(null);
   const [otp, setOtp] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -227,48 +228,38 @@ export default function RegisterScreen() {
           <GoogleButton onPress={onGoogle} disabled={loading} loading={loading} />
           <AuthDivider />
 
-          <TextInput
+          <PillInput
             accessibilityLabel="Full name"
-            style={[authStyles.field, focused === "name" && authStyles.fieldFocused]}
             placeholder="Full name"
-            placeholderTextColor={AUTH_PLACEHOLDER}
             value={name}
             onChangeText={setName}
             autoCapitalize="words"
             editable={!loading}
-            onFocus={() => setFocused("name")}
-            onBlur={() => setFocused(null)}
           />
-          <TextInput
+          <PillInput
+            style={authStyles.fieldGap}
             accessibilityLabel="Email address"
-            style={[authStyles.field, authStyles.fieldGap, focused === "email" && authStyles.fieldFocused]}
             placeholder="Email address"
-            placeholderTextColor={AUTH_PLACEHOLDER}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
             editable={!loading}
-            onFocus={() => setFocused("email")}
-            onBlur={() => setFocused(null)}
           />
-          <View style={[authStyles.fieldRow, authStyles.fieldGap, focused === "password" && authStyles.fieldFocused]}>
-            <TextInput
-              accessibilityLabel="Password"
-              style={authStyles.fieldInner}
-              placeholder="Password"
-              placeholderTextColor={AUTH_PLACEHOLDER}
-              secureTextEntry={!showPass}
-              value={password}
-              onChangeText={setPassword}
-              editable={!loading}
-              onFocus={() => setFocused("password")}
-              onBlur={() => setFocused(null)}
-            />
-            <TouchableOpacity accessibilityLabel={showPass ? "Hide password" : "Show password"} onPress={() => setShowPass(!showPass)}>
-              {showPass ? <EyeOff size={18} color="#B6BECD" /> : <Eye size={18} color="#B6BECD" />}
-            </TouchableOpacity>
-          </View>
+          <PillInput
+            style={authStyles.fieldGap}
+            accessibilityLabel="Password"
+            placeholder="Password"
+            secureTextEntry={!showPass}
+            value={password}
+            onChangeText={setPassword}
+            editable={!loading}
+            trailing={
+              <TouchableOpacity accessibilityLabel={showPass ? "Hide password" : "Show password"} onPress={() => setShowPass(!showPass)}>
+                {showPass ? <EyeOff size={18} color={colors.textSecondary} /> : <Eye size={18} color={colors.textSecondary} />}
+              </TouchableOpacity>
+            }
+          />
           <Text style={authStyles.hint}>At least 8 characters, one uppercase letter, and one number</Text>
 
           <View style={{ marginTop: 21 }}>
@@ -283,12 +274,12 @@ export default function RegisterScreen() {
 
       {step === "otp" && (
         <View style={authStyles.section}>
-          <View style={{ alignItems: "center", marginBottom: 20 }}><ShieldCheck size={38} color="#83DCF6" /></View>
+          <View style={{ alignItems: "center", marginBottom: 20 }}><ShieldCheck size={38} color={colors.primary} /></View>
           <Text style={authStyles.heading}>Verify your email</Text>
           <Text style={authStyles.subtitle}>Enter the 6-digit code sent to {email.trim().toLowerCase()}</Text>
           <TouchableOpacity activeOpacity={1} onPress={() => otpRef.current?.focus()} style={authStyles.otpRow}>
             {Array.from({ length: OTP_LENGTH }).map((_, index) => (
-              <View key={index} style={[authStyles.otpCell, { borderColor: index === otp.length ? "#82DDF5" : "rgba(255,255,255,0.08)" }]}>
+              <View key={index} style={[authStyles.otpCell, index === otp.length ? authStyles.otpCellActive : authStyles.otpCellIdle]}>
                 <Text style={authStyles.otpDigit}>{otp[index] || ""}</Text>
               </View>
             ))}

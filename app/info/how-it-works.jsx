@@ -1,7 +1,9 @@
-import { useTheme } from "@/context/ThemeContext";
+import { Block, IconCircle, PillButton, ScreenHeader, useDesign } from "@/components/ui/Design";
+import { Text } from "@/components/ui/Typography";
+import { SCREEN_GUTTER } from "@/constants/layout";
+import { useBottomSpacing } from "@/hooks/useSafeSpacing";
 import { router } from "expo-router";
 import {
-    ArrowLeft,
     Check,
     QrCode,
     ReceiptText,
@@ -10,7 +12,7 @@ import {
     Users,
     Wallet,
 } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const STEPS = [
@@ -59,20 +61,16 @@ const STEPS = [
 ];
 
 export default function HowItWorksScreen() {
-    const { colors } = useTheme();
+    const { colors } = useDesign();
+    const bottomSpacing = useBottomSpacing(32);
     const styles = getStyles(colors);
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-                    <ArrowLeft size={20} color={colors.text} />
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader title="How it works" back />
 
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-                <Text style={styles.eyebrow}>How it works</Text>
-                <Text style={styles.title}>From sign-up to settled</Text>
+            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
+                <Text style={styles.eyebrow}>From sign-up to settled</Text>
                 <Text style={styles.description}>
                     Six simple steps take a shared cost from the first expense to a cleared balance.
                 </Text>
@@ -80,11 +78,11 @@ export default function HowItWorksScreen() {
                 {STEPS.map((step, i) => {
                     const Icon = step.icon;
                     return (
-                        <View key={step.title} style={styles.card}>
+                        <Block key={step.title} style={styles.block}>
                             <View style={styles.stepHeader}>
-                                <View style={styles.stepIcon}>
+                                <IconCircle size={44}>
                                     <Icon size={20} color={colors.primary} />
-                                </View>
+                                </IconCircle>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.stepEyebrow}>
                                         Step {i + 1} · {step.eyebrow}
@@ -101,13 +99,15 @@ export default function HowItWorksScreen() {
                                     </View>
                                 ))}
                             </View>
-                        </View>
+                        </Block>
                     );
                 })}
 
-                <TouchableOpacity style={styles.cta} onPress={() => router.replace("/(tabs)/home")} activeOpacity={0.85}>
-                    <Text style={styles.ctaText}>Get started</Text>
-                </TouchableOpacity>
+                <PillButton
+                    label="Get started"
+                    onPress={() => router.replace("/(tabs)/home")}
+                    style={styles.cta}
+                />
             </ScrollView>
         </SafeAreaView>
     );
@@ -115,30 +115,16 @@ export default function HowItWorksScreen() {
 
 const getStyles = (colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: 12, paddingVertical: 8 },
-    backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-    scroll: { paddingHorizontal: 20, paddingBottom: 48 },
-    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8 },
-    title: { fontSize: 30, fontWeight: "800", color: colors.text, letterSpacing: -0.5 },
-    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 10 },
-    card: {
-        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-        borderRadius: 16, padding: 18, marginTop: 14, gap: 12,
-    },
+    scroll: { paddingTop: 4, paddingBottom: 48 },
+    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
+    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 4, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
+    block: { gap: 12 },
     stepHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
-    stepIcon: {
-        width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primaryLight,
-        alignItems: "center", justifyContent: "center",
-    },
     stepEyebrow: { fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1, color: colors.primary },
     stepTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 2 },
     stepDesc: { fontSize: 14, lineHeight: 22, color: colors.textSecondary },
     points: { gap: 8 },
     pointRow: { flexDirection: "row", alignItems: "center", gap: 8 },
     pointText: { fontSize: 13, color: colors.text },
-    cta: {
-        backgroundColor: colors.primary, paddingVertical: 15, borderRadius: 14,
-        alignItems: "center", marginTop: 24,
-    },
-    ctaText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+    cta: { marginHorizontal: SCREEN_GUTTER, marginTop: 4 },
 });

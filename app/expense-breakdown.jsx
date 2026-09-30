@@ -1,29 +1,29 @@
+import { useBottomSpacing } from "@/hooks/useSafeSpacing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Loader } from "@/components/Loader";
-import { useTheme } from "@/context/ThemeContext";
-import { api } from "@/lib/api";
-import { router } from "expo-router";
-import { ChevronLeft, PieChart as PieIcon } from "lucide-react-native";
+import { ChartSkeleton, RowListSkeleton } from "@/components/ui/Skeleton";
+import { Block, IconCircle, ListRow, RoundButton, ScreenHeader, useDesign } from "@/components/ui/Design";
+import { PieChart as PieIcon } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    FlatList,
+    StyleSheet,
+    View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
+import { api } from "@/lib/api";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const CACHE_KEY = "analytics_cache_v1";
 
 export default function ExpenseBreakdown() {
-  const { colors, theme } = useTheme();
+  const { colors } = useDesign();
+  const bottomSpacing = useBottomSpacing(32);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
 
-  const isDark = theme === "dark";
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const styles = useMemo(() => getStyles(colors), [colors]);
 
   const loadCachedAnalytics = async () => {
     try {
@@ -59,9 +59,10 @@ export default function ExpenseBreakdown() {
   if (!analytics && loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Loader size={48} />
-          <Text style={styles.loadingText}>Loading breakdown...</Text>
+        <View style={{ paddingTop: 16 }}>
+          <ChartSkeleton height={200} />
+          <View style={{ height: 12 }} />
+          <RowListSkeleton count={5} />
         </View>
       </SafeAreaView>
     );
@@ -71,23 +72,21 @@ export default function ExpenseBreakdown() {
   const total = categoryBreakdown.reduce((sum, item) => sum + item.amount, 0);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ChevronLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View>
-          <Text style={styles.title}>Expense Breakdown</Text>
-          <Text style={styles.subtitle}>All categories for this month</Text>
-        </View>
-        <View style={styles.headerIcon}>
-          <PieIcon size={18} color={colors.primary} />
-        </View>
-      </View>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader
+        back
+        title="Expense Breakdown"
+        subtitle="All categories for this month"
+        right={
+          <RoundButton label="Breakdown">
+            <PieIcon size={18} color={colors.primary} />
+          </RoundButton>
+        }
+      />
 
       {isFetching && (
         <View style={styles.refreshBadge}>
-          <Loader size={18} color="#fff" />
+          <Loader size={18} color={colors.onPrimary} />
           <Text style={styles.refreshText}>Refreshing...</Text>
         </View>
       )}
@@ -95,7 +94,7 @@ export default function ExpenseBreakdown() {
       <FlatList
         data={categoryBreakdown}
         keyExtractor={(item, index) => `${item.category}-${index}`}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: bottomSpacing }]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No expense data yet.</Text>
@@ -104,16 +103,18 @@ export default function ExpenseBreakdown() {
         renderItem={({ item, index }) => {
           const percent = total ? Math.round((item.amount / total) * 100) : 0;
           return (
-            <View style={styles.row}>
-              <View style={styles.rowLeft}>
-                <View style={[styles.colorDot, { backgroundColor: getColor(index) }]} />
-                <View>
-                  <Text style={styles.rowTitle}>{item.category}</Text>
-                  <Text style={styles.rowSub}>{percent}% of total</Text>
-                </View>
-              </View>
-              <Text style={styles.rowValue}>₹{item.amount.toLocaleString()}</Text>
-            </View>
+            <Block style={styles.rowBlock} padded={false}>
+              <ListRow
+                leading={
+                  <IconCircle tint={getColor(index) + "22"}>
+                    <View style={[styles.colorDot, { backgroundColor: getColor(index) }]} />
+                  </IconCircle>
+                }
+                title={item.category}
+                subtitle={`${percent}% of total`}
+                trailing={<Text style={styles.rowValue}>₹{item.amount.toLocaleString()}</Text>}
+              />
+            </Block>
           );
         }}
       />
@@ -133,48 +134,11 @@ const getColor = (index) => {
   return colors[index % colors.length];
 };
 
-const getStyles = (colors, isDark) =>
+const getStyles = (colors) =>
   StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
-    },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-    },
-    backButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    title: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: colors.text,
-    },
-    subtitle: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      marginTop: 2,
-    },
-    headerIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF",
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: isDark ? "rgba(99,102,241,0.35)" : "#E0E7FF",
     },
     refreshBadge: {
       alignSelf: "center",
@@ -188,47 +152,23 @@ const getStyles = (colors, isDark) =>
       marginBottom: 8,
     },
     refreshText: {
-      color: "white",
+      color: colors.onPrimary,
       fontSize: 12,
       fontWeight: "600",
     },
     listContent: {
-      paddingHorizontal: 20,
       paddingBottom: 40,
     },
-    row: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      padding: 14,
-      borderRadius: 14,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
+    rowBlock: {
       marginBottom: 12,
     },
-    rowLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
     colorDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-    },
-    rowTitle: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.text,
-    },
-    rowSub: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      marginTop: 2,
+      width: 14,
+      height: 14,
+      borderRadius: 7,
     },
     rowValue: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: "700",
       color: colors.text,
     },

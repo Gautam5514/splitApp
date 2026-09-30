@@ -1,14 +1,15 @@
+import { useBottomSpacing } from "@/hooks/useSafeSpacing";
 import { useAuth } from "@/context/AuthContext";
 import { Loader } from "@/components/Loader";
+import { RoundButton } from "@/components/ui/Design";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
-import { promptAddBalanceWidget } from "@/lib/homeScreenWidget";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
 import {
-    ArrowLeft,
+    ChevronLeft,
     ChevronRight,
     FileText,
     Gift,
@@ -20,28 +21,30 @@ import {
     ShieldCheck,
     Sparkles,
     Tag,
-    Trash2,
     Trash,
+    Trash2,
     UserCog,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
+import { Alert } from "@/lib/alert";
 import {
-    Alert,
-    ScrollView,
     Platform,
+    ScrollView,
     StyleSheet,
     Switch,
-    Text,
     TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { SCREEN_GUTTER } from "@/constants/layout";
 
 export default function SettingsScreen() {
     const { logout } = useAuth();
     const { theme, toggleTheme, colors } = useTheme();
+    const bottomSpacing = useBottomSpacing(24);
     const isDark = theme === "dark";
-    const styles = getStyles(colors);
+    const styles = getStyles(colors, isDark);
 
     const [email, setEmail] = useState("");
     const [deleting, setDeleting] = useState(false);
@@ -80,9 +83,7 @@ export default function SettingsScreen() {
                 onPress: async () => {
                     try {
                         const keys = await AsyncStorage.getAllKeys();
-                        const cacheKeys = keys.filter(
-                            (k) => k.includes("cache") || k.includes("_v1")
-                        );
+                        const cacheKeys = keys.filter((k) => k.includes("cache") || k.includes("_v1"));
                         await AsyncStorage.multiRemove(cacheKeys);
                         Alert.alert("Done", "Cached data cleared.");
                     } catch {
@@ -99,11 +100,7 @@ export default function SettingsScreen() {
             "This erases your account, groups you own, expenses and chats. This cannot be undone.",
             [
                 { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: deleteAccount,
-                },
+                { text: "Delete", style: "destructive", onPress: deleteAccount },
             ]
         );
     };
@@ -123,184 +120,91 @@ export default function SettingsScreen() {
     const doLogout = () => {
         Alert.alert("Log out", "Are you sure you want to log out?", [
             { text: "Cancel", style: "cancel" },
-            {
-                text: "Log out",
-                style: "destructive",
-                onPress: async () => {
-                    await logout();
-                    router.replace("/auth/login");
-                },
-            },
+            { text: "Log out", style: "destructive", onPress: async () => { await logout(); router.replace("/auth/login"); } },
         ]);
-    };
-
-    const addHomeWidget = async () => {
-        try {
-            const supported = await promptAddBalanceWidget();
-            if (!supported) {
-                Alert.alert("Widget picker", "Press and hold your home screen, choose Widgets, then select SplitEase Balance.");
-            }
-        } catch {
-            Alert.alert("Widget unavailable", "Install a new Android app build first, then try again. Home-screen widgets are not available in Expo Go.");
-        }
     };
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
+            {/* Header: back button + centered title */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-                    <ArrowLeft size={20} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Settings</Text>
-                <View style={{ width: 36 }} />
+                <RoundButton onPress={() => router.back()} label="Back">
+                    <ChevronLeft size={22} color={colors.text} strokeWidth={2.3} />
+                </RoundButton>
+                <Text style={styles.pageTitle}>Settings</Text>
+                <View style={styles.headerSpacer} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
                 {/* Account */}
-                <Text style={styles.sectionLabel}>Account</Text>
-                <View style={styles.card}>
-                    <Row icon={<Mail size={18} color={colors.textSecondary} />} label="Email" value={email || "—"} styles={styles} />
+                <Section label="Account" styles={styles}>
+                    <Row styles={styles} colors={colors} Icon={Mail} label="Email" value={email || "—"} hideChevron />
                     <Divider styles={styles} />
-                    <Row
-                        icon={<UserCog size={18} color={colors.textSecondary} />}
-                        label="Edit profile"
-                        onPress={() => router.push("/profile-edit")}
-                        chevron
-                        styles={styles}
-                    />
+                    <Row styles={styles} colors={colors} Icon={UserCog} label="Edit profile" onPress={() => router.push("/profile-edit")} />
                     <Divider styles={styles} />
-                    <Row
-                        icon={<KeyRound size={18} color={colors.textSecondary} />}
-                        label="Change password"
-                        onPress={changePassword}
-                        chevron
-                        styles={styles}
-                    />
-                </View>
+                    <Row styles={styles} colors={colors} Icon={KeyRound} label="Change password" onPress={changePassword} />
+                    <Divider styles={styles} />
+                    <Row styles={styles} colors={colors} Icon={ShieldCheck} label="Groups & privacy" onPress={() => router.push("/privacy")} />
+                    <Divider styles={styles} />
+                    <Row styles={styles} colors={colors} Icon={Mail} label="Group invites" onPress={() => router.push("/invites")} />
+                </Section>
 
                 {/* Appearance */}
-                <Text style={styles.sectionLabel}>Appearance</Text>
-                <View style={styles.card}>
-                    <View style={styles.row}>
-                        <View style={styles.rowLeft}>
-                            <Moon size={18} color={colors.textSecondary} />
-                            <Text style={styles.rowLabel}>Dark mode</Text>
-                        </View>
-                        <Switch
-                            value={isDark}
-                            onValueChange={toggleTheme}
-                            trackColor={{ false: "#E5E7EB", true: colors.primary }}
-                            thumbColor="#fff"
-                            ios_backgroundColor="#E5E7EB"
-                        />
-                    </View>
-                </View>
-
-                {Platform.OS === "android" && (
-                    <>
-                        <Text style={styles.sectionLabel}>Home Screen</Text>
-                        <View style={styles.card}>
-                            <Row
-                                icon={<PanelsTopLeft size={18} color={colors.primary} />}
-                                label="Add balance widget"
-                                value="See balances at a glance"
-                                onPress={addHomeWidget}
-                                chevron
-                                styles={styles}
+                <Section label="Appearance" styles={styles}>
+                    <Row
+                        styles={styles} colors={colors} Icon={Moon} label="Dark mode" hideChevron
+                        trailing={
+                            <Switch
+                                value={isDark}
+                                onValueChange={toggleTheme}
+                                trackColor={{ false: "#E5E7EB", true: colors.primary }}
+                                thumbColor="#fff"
+                                ios_backgroundColor="#E5E7EB"
                             />
-                        </View>
-                    </>
-                )}
+                        }
+                    />
+                    {Platform.OS === "android" && (
+                        <>
+                            <Divider styles={styles} />
+                            <Row styles={styles} colors={colors} Icon={PanelsTopLeft} label="Home screen widget" value="Design" onPress={() => router.push("/widget-customize")} />
+                        </>
+                    )}
+                </Section>
 
                 {/* Discover */}
-                <Text style={styles.sectionLabel}>Discover</Text>
-                <View style={styles.card}>
-                    <Row
-                        icon={<Sparkles size={18} color={colors.textSecondary} />}
-                        label="How it works"
-                        onPress={() => router.push("/info/how-it-works")}
-                        chevron
-                        styles={styles}
-                    />
+                <Section label="Discover" styles={styles}>
+                    <Row styles={styles} colors={colors} Icon={Sparkles} label="How it works" onPress={() => router.push("/info/how-it-works")} />
                     <Divider styles={styles} />
-                    <Row
-                        icon={<Gift size={18} color={colors.textSecondary} />}
-                        label="What we offer"
-                        onPress={() => router.push("/info/what-we-offer")}
-                        chevron
-                        styles={styles}
-                    />
+                    <Row styles={styles} colors={colors} Icon={Gift} label="What we offer" onPress={() => router.push("/info/what-we-offer")} />
                     <Divider styles={styles} />
-                    <Row
-                        icon={<Tag size={18} color={colors.textSecondary} />}
-                        label="Pricing"
-                        onPress={() => router.push("/info/pricing")}
-                        chevron
-                        styles={styles}
-                    />
-                </View>
+                    <Row styles={styles} colors={colors} Icon={Tag} label="Pricing" onPress={() => router.push("/info/pricing")} />
+                </Section>
 
-                {/* Legal */}
-                <Text style={styles.sectionLabel}>About & Legal</Text>
-                <View style={styles.card}>
-                    <Row
-                        icon={<FileText size={18} color={colors.textSecondary} />}
-                        label="Terms of Service"
-                        onPress={() => router.push("/info/terms")}
-                        chevron
-                        styles={styles}
-                    />
+                {/* About & Legal */}
+                <Section label="About & Legal" styles={styles}>
+                    <Row styles={styles} colors={colors} Icon={FileText} label="Terms of Service" onPress={() => router.push("/info/terms")} />
                     <Divider styles={styles} />
-                    <Row
-                        icon={<ShieldCheck size={18} color={colors.textSecondary} />}
-                        label="Privacy Policy"
-                        onPress={() => router.push("/info/privacy")}
-                        chevron
-                        styles={styles}
-                    />
+                    <Row styles={styles} colors={colors} Icon={ShieldCheck} label="Privacy Policy" onPress={() => router.push("/info/privacy")} />
                     <Divider styles={styles} />
-                    <Row
-                        icon={<FileText size={18} color={colors.textSecondary} />}
-                        label="Help Center"
-                        onPress={() => router.push("/info/help-center")}
-                        chevron
-                        styles={styles}
-                    />
-                </View>
+                    <Row styles={styles} colors={colors} Icon={FileText} label="Help Center" onPress={() => router.push("/info/help-center")} />
+                </Section>
 
                 {/* Storage */}
-                <Text style={styles.sectionLabel}>Storage</Text>
-                <View style={styles.card}>
-                    <Row
-                        icon={<Trash size={18} color={colors.textSecondary} />}
-                        label="Clear cached data"
-                        onPress={clearCache}
-                        chevron
-                        styles={styles}
-                    />
-                </View>
+                <Section label="Storage" styles={styles}>
+                    <Row styles={styles} colors={colors} Icon={Trash} label="Clear cached data" onPress={clearCache} />
+                </Section>
 
                 {/* Danger zone */}
-                <Text style={[styles.sectionLabel, { color: colors.error }]}>Danger Zone</Text>
-                <View style={[styles.card, { borderColor: colors.error }]}>
-                    <TouchableOpacity style={styles.dangerRow} onPress={confirmDelete} disabled={deleting} activeOpacity={0.7}>
-                        <View style={styles.rowLeft}>
-                            <Trash2 size={18} color={colors.error} />
-                            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete account permanently</Text>
-                        </View>
-                        {deleting ? (
-                            <Loader size={16} color={colors.error} />
-                        ) : (
-                            <ChevronRight size={18} color={colors.error} />
-                        )}
-                    </TouchableOpacity>
-                </View>
-
-                {/* Logout */}
-                <TouchableOpacity style={styles.logoutBtn} onPress={doLogout} activeOpacity={0.85}>
-                    <LogOut size={18} color={colors.error} />
-                    <Text style={styles.logoutText}>Log Out</Text>
-                </TouchableOpacity>
+                <Section label="Danger Zone" styles={styles}>
+                    <Row
+                        styles={styles} colors={colors} Icon={Trash2} label="Delete account permanently" danger
+                        onPress={deleting ? undefined : confirmDelete}
+                        trailing={deleting ? <Loader size={16} color={colors.error} /> : undefined}
+                        hideChevron={deleting}
+                    />
+                    <Divider styles={styles} />
+                    <Row styles={styles} colors={colors} Icon={LogOut} label="Log Out" danger hideChevron onPress={doLogout} />
+                </Section>
 
                 <Text style={styles.version}>SplitEase · v1.0.0</Text>
             </ScrollView>
@@ -308,95 +212,55 @@ export default function SettingsScreen() {
     );
 }
 
-function Row({ icon, label, value, onPress, chevron, styles }) {
-    const content = (
-        <View style={styles.row}>
-            <View style={styles.rowLeft}>
-                {icon}
-                <Text style={styles.rowLabel}>{label}</Text>
-            </View>
-            <View style={styles.rowRight}>
-                {value != null && <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>}
-                {chevron && <ChevronRight size={18} color="#9CA3AF" />}
-            </View>
+/* ── Reusable pieces (match profile page) ───────────────────────────────── */
+function Section({ label, children, styles }) {
+    return (
+        <View>
+            <Text style={styles.sectionLabel}>{label}</Text>
+            <View style={styles.card}>{children}</View>
         </View>
     );
-    if (onPress) {
-        return (
-            <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-                {content}
-            </TouchableOpacity>
-        );
-    }
-    return content;
+}
+
+function Row({ styles, colors, Icon, label, value, trailing, onPress, danger, hideChevron }) {
+    const tint = danger ? colors.error : colors.text;
+    const Wrapper = onPress ? TouchableOpacity : View;
+    return (
+        <Wrapper style={styles.row} activeOpacity={0.7} onPress={onPress} accessibilityRole={onPress ? "button" : undefined} accessibilityLabel={label}>
+            <View style={styles.rowIcon}><Icon size={21} color={tint} strokeWidth={1.9} /></View>
+            <Text style={[styles.rowLabel, { color: tint }]} numberOfLines={1}>{label}</Text>
+            {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
+            {trailing ?? (!hideChevron && <ChevronRight size={20} color={colors.textSecondary} />)}
+        </Wrapper>
+    );
 }
 
 function Divider({ styles }) {
     return <View style={styles.divider} />;
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-    headerTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
-    scroll: { padding: 16, paddingBottom: 40 },
-    sectionLabel: {
-        fontSize: 12,
-        fontWeight: "700",
-        color: colors.textSecondary,
-        textTransform: "uppercase",
-        letterSpacing: 0.5,
-        marginTop: 20,
-        marginBottom: 8,
-        marginLeft: 4,
-    },
+    header: { flexDirection: "row", alignItems: "center", paddingHorizontal: SCREEN_GUTTER, paddingTop: 4, paddingBottom: 12 },
+    pageTitle: { flex: 1, fontSize: 20, fontWeight: "800", color: colors.text, textAlign: "center", letterSpacing: -0.3 },
+    headerSpacer: { width: 44, height: 44 },
+
+    scroll: { paddingHorizontal: SCREEN_GUTTER, paddingTop: 4, paddingBottom: 40 },
+
+    sectionLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: 10, marginLeft: 4 },
     card: {
-        backgroundColor: colors.card,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.border,
-        overflow: "hidden",
+        backgroundColor: colors.card, borderRadius: 22,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+        paddingHorizontal: 16, marginBottom: 26,
+        shadowColor: "#0F172A", shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: isDark ? 0 : 0.05, shadowRadius: 16, elevation: isDark ? 0 : 2,
     },
-    row: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-    },
-    dangerRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-    },
-    rowLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-    rowRight: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "55%" },
-    rowLabel: { fontSize: 15, fontWeight: "500", color: colors.text },
-    rowValue: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
-    divider: { height: 1, backgroundColor: colors.border, marginLeft: 46 },
-    logoutBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        marginTop: 24,
-        paddingVertical: 15,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.error,
-        backgroundColor: colors.errorLight,
-    },
-    logoutText: { fontSize: 15, fontWeight: "700", color: colors.error },
-    version: { textAlign: "center", fontSize: 12, color: colors.textSecondary, marginTop: 20 },
+
+    row: { flexDirection: "row", alignItems: "center", paddingVertical: 15 },
+    rowIcon: { width: 30, alignItems: "flex-start", justifyContent: "center" },
+    rowLabel: { flex: 1, fontSize: 16, fontWeight: "500", color: colors.text },
+    rowValue: { fontSize: 14, color: colors.textSecondary, marginRight: 8, maxWidth: 170 },
+    divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 30 },
+
+    version: { textAlign: "center", fontSize: 12, color: colors.textSecondary, marginTop: 6 },
 });

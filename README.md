@@ -107,7 +107,7 @@ Sharing a referral link credits **50 coins** to the referrer and **25 coins** to
 | Backend services | Firebase (Auth, Cloud Messaging, Firestore/Storage) |
 | Data & networking | Axios |
 | Animation & UI | React Native Reanimated 4 · Expo Linear Gradient · Expo Blur · Lucide icons |
-| Charts | react-native-chart-kit / react-native-svg |
+| Charts | react-native-svg |
 | Native extras | Android home-screen widget (`react-native-android-widget`), Play Install Referrer, Expo Notifications |
 | Testing | Jest (`jest-expo`) · React Native Testing Library |
 | Tooling | TypeScript · ESLint (`eslint-config-expo`) |
@@ -123,7 +123,7 @@ splitApp/
 │   ├── groups/            # Group detail, balances, expenses
 │   ├── info/               # Help, pricing, privacy, terms, contact, etc.
 │   ├── join/[inviteCode]/  # Deep-link group invites
-│   └── ai-chat.jsx, rewards.jsx, theme-store.jsx, settings.jsx ...
+│   └── ai-chat.jsx, rewards.jsx, settings.jsx ...
 ├── components/            # Reusable UI: modals, charts, headers, chat UI
 ├── context/                # Auth, Notification, and Theme providers
 ├── lib/                    # API client, Firebase, sockets, push notifications

@@ -1,5 +1,8 @@
 import InviteModal from "@/components/InviteModal";
-import { Loader } from "@/components/Loader";
+import PendingInvitesList from "@/components/invites/PendingInvitesList";
+import { Alert } from "@/lib/alert";
+import { GroupListSkeleton } from "@/components/ui/Skeleton";
+import { Block, PillButton, PillInput, RoundButton } from "@/components/ui/Design";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
@@ -10,7 +13,8 @@ import {
     ChevronsRight,
     Crown,
     Home,
-    LogIn,
+    KeyRound,
+    ListFilter,
     Plane,
     Search,
     Plus,
@@ -19,38 +23,42 @@ import {
     Users,
     X
 } from "lucide-react-native";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
     FlatList,
-    Image,
-    ScrollView,
     StyleSheet,
-    Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTabScreenBottomPadding } from "@/hooks/useSafeSpacing";
+import { SCREEN_GUTTER } from "@/constants/layout";
 
 export default function TripsPage() {
     const { token } = useAuth();
     const { colors } = useTheme();
+    const tabBottomPadding = useTabScreenBottomPadding();
     const [groups, setGroups] = useState([]);
     const [view, setView] = useState("all");
     const [userId, setUserId] = useState(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
+    const loadedOnceRef = useRef(false);
+    const [refreshTick, setRefreshTick] = useState(0); // lets PendingInvitesList reload after every fetch
     const [creating, setCreating] = useState(false);
     const [inviteGroupId, setInviteGroupId] = useState(null);
     const [joinOpen, setJoinOpen] = useState(false);
     const [joinCode, setJoinCode] = useState("");
+    const [filterOpen, setFilterOpen] = useState(false);
 
     const styles = useMemo(() => getStyles(colors), [colors]);
 
     const fetchMeAndGroups = useCallback(async () => {
         try {
-            setLoading(true);
+            // Skeleton only on the very first load - a refresh (after completing,
+            // accepting an invite...) must not wipe the list back to placeholders.
+            if (!loadedOnceRef.current) setLoading(true);
             const [meRes, groupsRes] = await Promise.all([
                 api.get("/users/me"),
                 api.get("/groups"),
@@ -65,7 +73,9 @@ export default function TripsPage() {
             console.warn("Failed to fetch groups:", err?.message || err);
             Alert.alert("Error", "Failed to load groups. Please try again.");
         } finally {
+            loadedOnceRef.current = true;
             setLoading(false);
+            setRefreshTick((t) => t + 1);
         }
     }, []);
 
@@ -198,164 +208,125 @@ export default function TripsPage() {
 
     const listHeader = (
         <>
-                {/* Header Section */}
-                <View style={[styles.header, { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }]}>
-                    <View style={[styles.headerTextContainer, { flex: 1 }]}>
-                        <View style={styles.titleRow}>
-                            <Image
-                                source={require("../../assets/images/logo-mark.png")}
-                                style={styles.titleLogo}
-                                resizeMode="contain"
-                            />
-                            <Text style={styles.title}>SplitEase</Text>
-                        </View>
+                {/* Header Section — big title + round "new" action */}
+                <View style={styles.header}>
+                    <View style={styles.headerText}>
+                        <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>SplitEase</Text>
                         <Text style={styles.subtitle}>
                             Find owned and shared trips without digging through groups.
                         </Text>
                     </View>
-                    <TouchableOpacity
-                        onPress={() => router.push("/create-group")}
-                        activeOpacity={0.85}
-                        style={{
-                            flexDirection: "row", alignItems: "center", gap: 6,
-                            backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10,
-                            borderRadius: 999, marginTop: 4,
-                        }}
-                    >
-                        <Plus size={16} color="#fff" strokeWidth={2.6} />
-                        <Text style={{ color: "#fff", fontSize: 13.5, fontWeight: "700" }}>New</Text>
-                    </TouchableOpacity>
+                    <RoundButton onPress={() => router.push("/create-group")} label="Create a new group">
+                        <Plus size={20} color={colors.text} strokeWidth={2.4} />
+                    </RoundButton>
                 </View>
 
-                {/* Join with code */}
-                {!joinOpen ? (
-                    <TouchableOpacity
-                        style={styles.joinCodeToggle}
-                        onPress={() => setJoinOpen(true)}
-                        activeOpacity={0.7}
-                    >
-                        <LogIn size={15} color={colors.primary} />
-                        <Text style={styles.joinCodeToggleText}>Have an invite code? Join a group</Text>
-                    </TouchableOpacity>
-                ) : (
+                {/* Group invites waiting for my yes / no */}
+                <PendingInvitesList compact onChanged={fetchMeAndGroups} refreshKey={refreshTick} />
+
+                {/* One line: search / name · invite-code · filter dropdown */}
+                <View style={styles.searchRow}>
+                    <PillInput
+                        placeholder="Search or name a group…"
+                        style={styles.searchPill}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                        icon={<Search size={19} color={colors.textSecondary} strokeWidth={2} />}
+                        trailing={searchQuery.length > 0 ? (
+                            <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <X size={18} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        ) : null}
+                    />
+
+                    {searchQuery.length > 0 ? (
+                        // Typing a name → the row becomes "create this group".
+                        <PillButton
+                            label={creating ? undefined : "Create"}
+                            onPress={createGroup}
+                            disabled={creating}
+                            loading={creating}
+                            icon={creating ? undefined : <Plus size={14} color={colors.onPrimary} strokeWidth={3} />}
+                            style={styles.createBtn}
+                        />
+                    ) : (
+                        <>
+                            {/* Invite-code button — opens the code input below. */}
+                            <RoundButton
+                                onPress={() => { setJoinOpen((v) => !v); setFilterOpen(false); }}
+                                label="Have an invite code?"
+                                active={joinOpen}
+                                size={48}
+                            >
+                                <KeyRound size={19} color={joinOpen ? colors.onPrimary : colors.text} strokeWidth={2.1} />
+                            </RoundButton>
+
+                            {/* Filter button — opens a full-width option list below. */}
+                            <RoundButton
+                                onPress={() => { setFilterOpen((v) => !v); setJoinOpen(false); }}
+                                label="Filter groups"
+                                active={filterOpen}
+                                size={48}
+                            >
+                                <ListFilter size={19} color={filterOpen ? colors.onPrimary : colors.text} strokeWidth={2.1} />
+                            </RoundButton>
+                        </>
+                    )}
+                </View>
+
+                {/* Filter options — simple pills in a line (not a boxed list). */}
+                {filterOpen && (
+                    <View style={styles.filterMenu}>
+                        {filterTabs.map((tab) => {
+                            const selected = view === tab.key;
+                            return (
+                                <TouchableOpacity
+                                    key={tab.key}
+                                    style={[styles.filterPill, selected && styles.filterPillActive]}
+                                    onPress={() => { setView(tab.key); setFilterOpen(false); }}
+                                    activeOpacity={0.75}
+                                >
+                                    <Text style={[styles.filterPillText, selected && styles.filterPillTextActive]}>
+                                        {tab.label} {tab.count}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
+
+                {/* Invite-code input (revealed by the invite button) */}
+                {joinOpen && (
                     <View style={styles.joinCodeRow}>
-                        <TextInput
-                            placeholder="Enter invite code"
-                            placeholderTextColor={colors.textSecondary || "#9CA3AF"}
+                        <PillInput
+                            placeholder="6-character code, e.g. K7M2QX"
                             style={styles.joinCodeInput}
                             value={joinCode}
                             onChangeText={setJoinCode}
-                            autoCapitalize="none"
+                            autoCapitalize="characters"
                             autoCorrect={false}
-                            selectionColor={colors.primary}
                         />
-                        <TouchableOpacity
+                        <PillButton
+                            label="Join"
                             onPress={() => {
-                                const code = joinCode.trim();
+                                // "k7m 2qx" -> "K7M2QX"; old long links pass through as typed.
+                                const raw = joinCode.trim();
+                                const compact = raw.replace(/[\s-]/g, "").toUpperCase();
+                                const code = /^[A-Z2-9]{6}$/.test(compact) ? compact : raw;
                                 if (!code) return;
                                 setJoinOpen(false);
                                 setJoinCode("");
                                 router.push(`/join/${encodeURIComponent(code)}`);
                             }}
                             style={styles.joinCodeBtn}
-                            activeOpacity={0.85}
-                        >
-                            <Text style={styles.joinCodeBtnText}>Join</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => { setJoinOpen(false); setJoinCode(""); }} style={{ padding: 6 }}>
-                            <X size={18} color={colors.textSecondary} />
-                        </TouchableOpacity>
+                        />
                     </View>
                 )}
 
-                {/* Unified Search & Create */}
-                <View style={styles.unifiedInputContainer}>
-                    <Search size={20} color={colors.textSecondary} />
-                    <TextInput
-                        placeholder="Search or name a new group…"
-                        placeholderTextColor={colors.textSecondary || "#9CA3AF"}
-                        style={styles.unifiedInput}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        selectionColor={colors.primary}
-                        autoCapitalize="words"
-                        autoCorrect={false}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery("")} style={{ marginRight: 8, padding: 4 }}>
-                            <X size={18} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    )}
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity
-                            onPress={createGroup}
-                            disabled={creating}
-                            style={[
-                                styles.unifiedCreateBtn,
-                                creating && styles.unifiedCreateBtnDisabled,
-                            ]}
-                        >
-                            {creating ? (
-                                <Loader size={18} color="#fff" />
-                            ) : (
-                                <>
-                                    <Plus size={14} color="white" strokeWidth={3} />
-                                    <Text style={styles.unifiedCreateBtnText}>Create</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    )}
-                </View>
-
-                {/* Search and filters */}
-                {!loading && groups.length > 0 && (
-                    <View style={styles.finder}>
-
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.tabsContainer}
-                        >
-                            {filterTabs.map((tab) => {
-                                const active = view === tab.key;
-                                return (
-                                    <TouchableOpacity
-                                        key={tab.key}
-                                        onPress={() => setView(tab.key)}
-                                        style={[
-                                            styles.tab,
-                                            active ? styles.tabActive : styles.tabInactive,
-                                        ]}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.tabText,
-                                                active ? styles.tabTextActive : styles.tabTextInactive,
-                                            ]}
-                                        >
-                                            {tab.label}
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.tabCount,
-                                                active ? styles.tabCountActive : styles.tabCountInactive,
-                                            ]}
-                                        >
-                                            {tab.count}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-                )}
-
-                {/* Loader */}
-                {loading && (
-                    <View style={styles.loadingContainer}>
-                        <Loader size={48} />
-                    </View>
-                )}
+                {/* Skeleton while the first load runs */}
+                {loading && <GroupListSkeleton count={5} />}
         </>
     );
 
@@ -363,7 +334,7 @@ export default function TripsPage() {
         if (loading) return null;
         if (groups.length === 0) {
             return (
-                <View style={styles.emptyCard}>
+                <Block style={styles.emptyCard}>
                     <Users size={38} color={colors.primary} />
                     <Text style={styles.emptyTitle}>No groups yet</Text>
                     <Text style={styles.emptyText}>
@@ -372,11 +343,11 @@ export default function TripsPage() {
                     <Text style={styles.emptyQuote}>
                         &quot;Good trips become great when expenses stay fair.&quot;
                     </Text>
-                </View>
+                </Block>
             );
         }
         return (
-            <View style={styles.emptyStateContainer}>
+            <Block style={styles.emptyStateContainer}>
                 <Search size={30} color={colors.textSecondary} />
                 <Text style={styles.emptyStateTitle}>
                     {emptyTitleForView[view]}
@@ -386,7 +357,7 @@ export default function TripsPage() {
                         ? "Try a different trip name or member name."
                         : emptyTextForView[view]}
                 </Text>
-            </View>
+            </Block>
         );
     };
 
@@ -404,14 +375,14 @@ export default function TripsPage() {
     ), [markCompleted, deleteTrip, view, colors, styles]);
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={["top"]}>
             <FlatList
                 data={loading ? [] : decoratedGroups}
                 keyExtractor={(g) => g._id}
                 renderItem={renderGroupCard}
                 ListHeaderComponent={listHeader}
                 ListEmptyComponent={listEmpty}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBottomPadding }]}
                 showsVerticalScrollIndicator={false}
                 initialNumToRender={8}
                 windowSize={7}
@@ -466,7 +437,7 @@ const GroupCard = memo(function GroupCard({ group, isCreator = false, view = "al
                             {isCreator ? (
                                 <Crown size={13} color={colors.primary} />
                             ) : (
-                                <UserPlus size={13} color="#7C3AED" />
+                                <UserPlus size={13} color={colors.textSecondary} />
                             )}
                             <Text style={[styles.ownerBadgeText, isCreator ? styles.ownedBadgeText : styles.sharedBadgeText]}>
                                 {isCreator ? "Owned" : "Shared"}
@@ -483,9 +454,9 @@ const GroupCard = memo(function GroupCard({ group, isCreator = false, view = "al
                             {group.groupType === "roommate" ? (
                                 <Home size={11} color="#047857" />
                             ) : group.groupType === "trip" ? (
-                                <Plane size={11} color="#4F46E5" />
+                                <Plane size={11} color={colors.primary} />
                             ) : (
-                                <Users size={11} color="#6D28D9" />
+                                <Users size={11} color={colors.primary} />
                             )}
                             <Text style={[
                                 styles.typeBadgeText,
@@ -576,7 +547,7 @@ const GroupCard = memo(function GroupCard({ group, isCreator = false, view = "al
                     onPress={handleDeletePress}
                     style={styles.deleteTripButton}
                 >
-                    <Trash2 size={15} color="#DC2626" />
+                    <Trash2 size={15} color={colors.error} />
                     <Text style={styles.deleteTripButtonText}>Delete Trip</Text>
                 </TouchableOpacity>
             )}
@@ -598,199 +569,98 @@ const getStyles = (colors) => StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
-        marginBottom: -25,
-    },
-    joinCodeToggle: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        marginHorizontal: 20,
-        marginBottom: 12,
-        paddingVertical: 10,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.card,
-    },
-    joinCodeToggleText: {
-        fontSize: 13,
-        fontWeight: "600",
-        color: colors.primary,
     },
     joinCodeRow: {
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
-        marginHorizontal: 20,
+        marginHorizontal: SCREEN_GUTTER,
         marginBottom: 12,
     },
     joinCodeInput: {
         flex: 1,
-        height: 46,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.card,
-        paddingHorizontal: 14,
-        fontSize: 14,
-        color: colors.text,
     },
     joinCodeBtn: {
-        backgroundColor: colors.primary,
-        paddingHorizontal: 18,
-        height: 46,
-        borderRadius: 12,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    joinCodeBtnText: {
-        color: "#FFFFFF",
-        fontWeight: "700",
-        fontSize: 14,
-    },
-    scrollView: {
-        flex: 1,
+        paddingHorizontal: 20,
     },
     scrollContent: {
         paddingTop: 10,
         paddingBottom: 150, // Space for bottom nav and FAB
     },
     header: {
-        marginBottom: 24,
-        paddingHorizontal: 24,
-    },
-    headerTextContainer: {
-        marginBottom: 16,
-    },
-    titleRow: {
         flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        marginBottom: 4,
-    },
-    titleLogo: {
-        width: 35,
-        height: 28,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: "800",
-        color: colors.primary,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: colors.textSecondary,
-    },
-    unifiedInputContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: colors.card,
-        borderBottomWidth: 1,
-        borderTopWidth: 1,
-        borderColor: colors.border,
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        marginBottom: 20,
-    },
-    unifiedInput: {
-        flex: 1,
-        fontSize: 16,
-        color: colors.text || '#000000',
-        paddingVertical: 8,
-        minHeight: 40,
-        marginLeft: 10,
-    },
-    unifiedCreateBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        backgroundColor: colors.primary,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 999,
-    },
-    unifiedCreateBtnDisabled: {
-        opacity: 0.5,
-    },
-    unifiedCreateBtnText: {
-        color: "white",
-        fontSize: 13,
-        fontWeight: "700",
-    },
-    finder: {
+        alignItems: "flex-start",
+        justifyContent: "space-between",
         gap: 12,
         marginBottom: 20,
+        paddingHorizontal: SCREEN_GUTTER,
+        paddingTop: 8,
     },
-    tabsContainer: {
+    headerText: {
+        flex: 1,
+        minWidth: 0,
+    },
+    title: {
+        fontSize: 30,
+        fontWeight: "700",
+        color: colors.text,
+        letterSpacing: -0.3,
+    },
+    subtitle: {
+        fontSize: 13.5,
+        color: colors.textSecondary,
+        marginTop: 4,
+    },
+    searchRow: {
         flexDirection: "row",
-        gap: 8,
-        paddingHorizontal: 24,
-    },
-    tab: {
-        minWidth: 76,
-        paddingVertical: 9,
-        paddingHorizontal: 12,
-        borderRadius: 8,
         alignItems: "center",
-        justifyContent: "center",
-        borderWidth: 1,
+        gap: 10,
+        paddingHorizontal: SCREEN_GUTTER,
+        marginBottom: 16,
+        zIndex: 20,
+    },
+    searchPill: {
+        flex: 1,
+    },
+    createBtn: {
+        paddingHorizontal: 18,
+    },
+    filterMenu: {
         flexDirection: "row",
-        gap: 6,
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 8,
+        marginHorizontal: SCREEN_GUTTER,
+        marginBottom: 12,
     },
-    tabActive: {
-        backgroundColor: colors.primary,
-        borderColor: "transparent",
-    },
-    tabInactive: {
+    filterPill: {
+        paddingHorizontal: 16,
+        paddingVertical: 9,
+        borderRadius: 999,
         backgroundColor: colors.card,
+        borderWidth: StyleSheet.hairlineWidth,
         borderColor: colors.border,
     },
-    tabText: {
-        fontSize: 14,
+    filterPillActive: {
+        backgroundColor: colors.primaryLight,
+        borderColor: colors.primary,
+    },
+    filterPillText: {
+        fontSize: 13.5,
         fontWeight: "600",
-    },
-    tabCount: {
-        minWidth: 22,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 999,
-        overflow: "hidden",
-        textAlign: "center",
-        fontSize: 11,
-        fontWeight: "700",
-    },
-    tabTextActive: {
-        color: "white",
-    },
-    tabTextInactive: {
         color: colors.textSecondary,
     },
-    tabCountActive: {
+    filterPillTextActive: {
         color: colors.primary,
-        backgroundColor: "white",
-    },
-    tabCountInactive: {
-        color: colors.textSecondary,
-        backgroundColor: colors.inputBackground,
-    },
-    loadingContainer: {
-        paddingVertical: 60,
-        alignItems: "center",
     },
     emptyCard: {
-        backgroundColor: colors.card,
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        borderColor: colors.border,
-        paddingHorizontal: 24,
-        paddingVertical: 60,
         alignItems: "center",
+        paddingVertical: 48,
     },
     emptyTitle: {
         fontSize: 18,
         fontWeight: "600",
-        color: colors.primary,
+        color: colors.text,
         marginTop: 16,
         marginBottom: 8,
     },
@@ -806,45 +676,15 @@ const getStyles = (colors) => StyleSheet.create({
         fontStyle: "italic",
         textAlign: "center",
     },
-    groupsContainer: {
-        gap: 14,
-    },
-    summaryRow: {
-        flexDirection: "row",
-        gap: 8,
-        flexWrap: "wrap",
-    },
-    summaryItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-    },
-    summaryText: {
-        color: colors.textSecondary,
-        fontSize: 12,
-        fontWeight: "700",
-    },
-    section: {
-        gap: 0,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: "700",
-        color: colors.primary,
-        marginBottom: 4,
-    },
     groupCard: {
+        marginHorizontal: SCREEN_GUTTER,
+        marginBottom: 12,
+        borderRadius: 22,
         backgroundColor: colors.card,
-        borderBottomWidth: 1,
+        borderWidth: StyleSheet.hairlineWidth,
         borderColor: colors.border,
-        paddingVertical: 20,
-        paddingHorizontal: 24,
+        paddingVertical: 16,
+        paddingHorizontal: 16,
         gap: 8,
     },
     groupCardHeader: {
@@ -875,7 +715,7 @@ const getStyles = (colors) => StyleSheet.create({
         backgroundColor: colors.primaryLight,
     },
     sharedBadge: {
-        backgroundColor: "#F3E8FF",
+        backgroundColor: colors.primaryLight,
     },
     ownerBadgeText: {
         fontSize: 11,
@@ -885,7 +725,7 @@ const getStyles = (colors) => StyleSheet.create({
         color: colors.primary,
     },
     sharedBadgeText: {
-        color: "#7C3AED",
+        color: colors.textSecondary,
     },
     doneBadge: {
         flexDirection: "row",
@@ -902,9 +742,10 @@ const getStyles = (colors) => StyleSheet.create({
         fontWeight: "800",
     },
     groupCardTitle: {
-        fontSize: 16,
+        fontSize: 16.5,
         fontWeight: "600",
         color: colors.text,
+        letterSpacing: -0.2,
     },
     metaRow: {
         flexDirection: "row",
@@ -918,7 +759,7 @@ const getStyles = (colors) => StyleSheet.create({
         gap: 5,
     },
     groupCardMembers: {
-        fontSize: 14,
+        fontSize: 13.5,
         color: colors.textSecondary,
     },
     groupCardMembersList: {
@@ -936,7 +777,7 @@ const getStyles = (colors) => StyleSheet.create({
         height: 18,
         borderWidth: 2,
         borderColor: colors.border,
-        borderRadius: 4,
+        borderRadius: 6,
         justifyContent: "center",
         alignItems: "center",
     },
@@ -968,17 +809,13 @@ const getStyles = (colors) => StyleSheet.create({
         paddingVertical: 6,
     },
     deleteTripButtonText: {
-        color: "#DC2626",
+        color: colors.error,
         fontSize: 14,
         fontWeight: "700",
     },
     emptyStateContainer: {
-        paddingVertical: 60,
-        paddingHorizontal: 24,
+        paddingVertical: 48,
         alignItems: "center",
-        backgroundColor: colors.card,
-        borderBottomWidth: 1,
-        borderColor: colors.border,
     },
     emptyStateTitle: {
         marginTop: 12,
@@ -991,72 +828,6 @@ const getStyles = (colors) => StyleSheet.create({
         fontSize: 14,
         color: colors.textSecondary,
         textAlign: "center",
-    },
-    // Modal Styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
-    },
-    modalContent: {
-        backgroundColor: colors.card,
-        borderRadius: 16,
-        padding: 24,
-        width: "100%",
-        maxWidth: 400,
-    },
-    modalHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 16,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: "700",
-        color: colors.text,
-    },
-    modalText: {
-        fontSize: 14,
-        color: colors.textSecondary,
-        marginBottom: 16,
-    },
-    linkContainer: {
-        backgroundColor: colors.background,
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 16,
-    },
-    linkText: {
-        fontSize: 12,
-        color: colors.primary,
-        fontWeight: "500",
-    },
-    shareButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        backgroundColor: colors.primary,
-        padding: 14,
-        borderRadius: 8,
-        marginBottom: 12,
-    },
-    shareButtonText: {
-        color: "white",
-        fontSize: 16,
-        fontWeight: "600",
-    },
-    closeButton: {
-        padding: 12,
-        alignItems: "center",
-    },
-    closeButtonText: {
-        color: colors.textSecondary,
-        fontSize: 14,
-        fontWeight: "600",
     },
     // Group Type badges
     typeBadge: {
@@ -1076,18 +847,18 @@ const getStyles = (colors) => StyleSheet.create({
         fontWeight: "800",
     },
     tripBadge: {
-        backgroundColor: "#E0E7FF",
+        backgroundColor: colors.primaryLight,
     },
     tripBadgeText: {
-        color: "#4F46E5",
+        color: colors.primary,
         fontSize: 11,
         fontWeight: "800",
     },
     groupBadge: {
-        backgroundColor: "#EDE9FE",
+        backgroundColor: colors.primaryLight,
     },
     groupBadgeText: {
-        color: "#6D28D9",
+        color: colors.primary,
         fontSize: 11,
         fontWeight: "800",
     },

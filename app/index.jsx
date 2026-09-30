@@ -1,3 +1,4 @@
+import { FullScreenLoader } from "@/components/Loader";
 import { useAuth } from "@/context/AuthContext";
 import { getPendingJoinCodeFromInstallReferrer } from "@/lib/installReferrer";
 import { router } from "expo-router";
@@ -24,6 +25,10 @@ export default function IndexScreen() {
       router.replace("/(tabs)/home");
     }
   }, [loading, token]);
+
+  // Signed-in users are about to be redirected home - show a loader instead of
+  // flashing the onboarding slides while auth restores or the redirect runs.
+  if (loading || token) return <FullScreenLoader />;
 
   return <OnboardingScreen />;
 }

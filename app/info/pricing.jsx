@@ -1,7 +1,10 @@
-import { useTheme } from "@/context/ThemeContext";
+import { Block, PillButton, ScreenHeader, useDesign } from "@/components/ui/Design";
+import { Text } from "@/components/ui/Typography";
+import { SCREEN_GUTTER } from "@/constants/layout";
+import { useBottomSpacing } from "@/hooks/useSafeSpacing";
 import { router } from "expo-router";
-import { ArrowLeft, Check, Clock, Sparkles } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Check, Clock, Sparkles } from "lucide-react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const PLANS = [
@@ -69,51 +72,46 @@ const FAQS = [
 ];
 
 export default function PricingScreen() {
-    const { colors } = useTheme();
+    const { colors, t } = useDesign();
+    const bottomSpacing = useBottomSpacing(32);
     const styles = getStyles(colors);
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-                    <ArrowLeft size={20} color={colors.text} />
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader title="Pricing" back />
 
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-                <Text style={styles.eyebrow}>Pricing</Text>
-                <Text style={styles.title}>Simple, honest pricing</Text>
+            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
+                <Text style={styles.eyebrow}>Simple, honest pricing</Text>
                 <Text style={styles.description}>
                     The core app is free forever. A Pro tier is on the way for power users.
                 </Text>
 
                 {PLANS.map((plan) => (
-                    <View
+                    <Block
                         key={plan.name}
-                        style={[styles.planCard, plan.highlight && styles.planCardHighlight]}
+                        style={[styles.planBlock, plan.highlight && { borderColor: t.ink, borderWidth: 1.5 }]}
                     >
                         {plan.highlight && (
-                            <View style={styles.badge}>
-                                <Sparkles size={12} color="#FFFFFF" />
-                                <Text style={styles.badgeText}>Most popular</Text>
+                            <View style={[styles.badge, { backgroundColor: t.ink }]}>
+                                <Sparkles size={12} color={colors.onPrimary} />
+                                <Text style={[styles.badgeText, { color: colors.onPrimary }]}>Most popular</Text>
                             </View>
                         )}
                         <Text style={styles.planName}>{plan.name}</Text>
-                        <Text style={[styles.planPrice, plan.highlight && { color: colors.primary }]}>{plan.price}</Text>
+                        <Text style={styles.planPrice}>{plan.price}</Text>
                         <Text style={styles.planBlurb}>{plan.blurb}</Text>
-                        <TouchableOpacity
-                            style={[styles.planCta, plan.highlight ? styles.planCtaPrimary : styles.planCtaOutline]}
+                        <PillButton
+                            label={plan.cta}
+                            variant={plan.highlight ? "primary" : "secondary"}
                             onPress={() => (plan.highlight ? router.replace("/(tabs)/home") : router.push("/info/contact"))}
-                            activeOpacity={0.85}
-                        >
-                            <Text style={[styles.planCtaText, plan.highlight && { color: "#FFFFFF" }]}>{plan.cta}</Text>
-                        </TouchableOpacity>
-                    </View>
+                            style={styles.planCta}
+                        />
+                    </Block>
                 ))}
 
                 <Text style={styles.sectionHeading}>What{"'"}s included</Text>
                 {FEATURE_GROUPS.map((group) => (
-                    <View key={group.title} style={styles.card}>
+                    <Block key={group.title} style={styles.block}>
                         <Text style={styles.cardTitle}>{group.title}</Text>
                         {group.features.map(([label, state]) => (
                             <View key={label} style={styles.featureRow}>
@@ -126,15 +124,15 @@ export default function PricingScreen() {
                                 {state === "soon" && <Text style={styles.soonTag}>Soon</Text>}
                             </View>
                         ))}
-                    </View>
+                    </Block>
                 ))}
 
                 <Text style={styles.sectionHeading}>Frequently asked</Text>
                 {FAQS.map((f) => (
-                    <View key={f.q} style={styles.card}>
+                    <Block key={f.q} style={styles.block}>
                         <Text style={styles.faqQ}>{f.q}</Text>
                         <Text style={styles.faqA}>{f.a}</Text>
-                    </View>
+                    </Block>
                 ))}
             </ScrollView>
         </SafeAreaView>
@@ -143,34 +141,21 @@ export default function PricingScreen() {
 
 const getStyles = (colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: 12, paddingVertical: 8 },
-    backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-    scroll: { paddingHorizontal: 20, paddingBottom: 48 },
-    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8 },
-    title: { fontSize: 30, fontWeight: "800", color: colors.text, letterSpacing: -0.5 },
-    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 10, marginBottom: 8 },
-    planCard: {
-        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-        borderRadius: 16, padding: 20, marginTop: 14, gap: 6,
-    },
-    planCardHighlight: { borderColor: colors.primary, borderWidth: 2 },
+    scroll: { paddingTop: 4, paddingBottom: 48 },
+    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
+    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 4, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
+    planBlock: { gap: 6 },
     badge: {
         flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start",
-        backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 4,
+        paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 4,
     },
-    badgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
+    badgeText: { fontSize: 11, fontWeight: "800" },
     planName: { fontSize: 18, fontWeight: "800", color: colors.text },
     planPrice: { fontSize: 28, fontWeight: "800", color: colors.text },
     planBlurb: { fontSize: 14, lineHeight: 21, color: colors.textSecondary, marginVertical: 4 },
-    planCta: { paddingVertical: 13, borderRadius: 12, alignItems: "center", marginTop: 6 },
-    planCtaPrimary: { backgroundColor: colors.primary },
-    planCtaOutline: { borderWidth: 1, borderColor: colors.border },
-    planCtaText: { fontSize: 14, fontWeight: "700", color: colors.text },
-    sectionHeading: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 28, marginBottom: 2 },
-    card: {
-        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-        borderRadius: 14, padding: 18, marginTop: 12, gap: 10,
-    },
+    planCta: { marginTop: 6 },
+    sectionHeading: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 28, marginBottom: 2, marginHorizontal: SCREEN_GUTTER },
+    block: { gap: 10 },
     cardTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
     featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
     featureLabel: { flex: 1, fontSize: 14, color: colors.text },

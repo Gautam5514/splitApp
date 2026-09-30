@@ -1,5 +1,7 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNotifications } from "@/context/NotificationContext";
-import { useTheme } from "@/context/ThemeContext";
+import { IconCircle, ListRow, RoundButton, useDesign } from "@/components/ui/Design";
+import { TYPE } from "@/constants/design";
 import { router } from "expo-router";
 import {
     Bell,
@@ -15,10 +17,10 @@ import {
     Modal,
     Pressable,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 const timeAgo = (value) => {
     if (!value) return "Just now";
@@ -41,11 +43,12 @@ const metaFor = (type, colors) => {
 };
 
 export default function NotificationBell({ iconColor }) {
-    const { colors } = useTheme();
+    const { colors, t } = useDesign();
+    const insets = useSafeAreaInsets();
     const { notifications, hasUnread, markAllAsRead, markOneAsRead } =
         useNotifications();
     const [open, setOpen] = useState(false);
-    const styles = getStyles(colors);
+    const styles = getStyles(colors, t);
 
     const unreadCount = notifications.filter((n) => !n.isRead).length;
 
@@ -69,22 +72,18 @@ export default function NotificationBell({ iconColor }) {
         ({ item: n }) => {
             const { Icon, color } = metaFor(n.type, colors);
             return (
-                <TouchableOpacity
-                    style={styles.item}
+                <ListRow
                     onPress={() => handlePress(n)}
-                    activeOpacity={0.7}
-                >
-                    <View style={[styles.itemIcon, { backgroundColor: color + "1A" }]}>
-                        <Icon size={16} color={color} />
-                    </View>
-                    <View style={styles.itemBody}>
-                        <Text style={styles.itemMessage} numberOfLines={2}>
-                            {n.message}
-                        </Text>
-                        <Text style={styles.itemTime}>{timeAgo(n.createdAt)}</Text>
-                    </View>
-                    {!n.isRead && <View style={styles.unreadDot} />}
-                </TouchableOpacity>
+                    leading={
+                        <IconCircle size={44} tint={color + "1A"}>
+                            <Icon size={18} color={color} />
+                        </IconCircle>
+                    }
+                    title={n.message}
+                    numberOfLines={2}
+                    subtitle={timeAgo(n.createdAt)}
+                    trailing={!n.isRead ? <View style={styles.unreadDot} /> : null}
+                />
             );
         },
         [colors, styles, handlePress]
@@ -115,7 +114,7 @@ export default function NotificationBell({ iconColor }) {
                 animationType="fade"
                 onRequestClose={() => setOpen(false)}
             >
-                <Pressable style={styles.overlay} onPress={() => setOpen(false)}>
+                <Pressable style={[styles.overlay, { paddingTop: insets.top + 64, paddingBottom: insets.bottom + 16 }]} onPress={() => setOpen(false)}>
                     <Pressable style={styles.panel} onPress={(e) => e.stopPropagation()}>
                         <View style={styles.panelHeader}>
                             <Text style={styles.panelTitle}>Notifications</Text>
@@ -130,13 +129,9 @@ export default function NotificationBell({ iconColor }) {
                                         <Text style={styles.markAllText}>Mark all read</Text>
                                     </TouchableOpacity>
                                 )}
-                                <TouchableOpacity
-                                    onPress={() => setOpen(false)}
-                                    style={styles.closeBtn}
-                                    activeOpacity={0.7}
-                                >
-                                    <X size={18} color={colors.textSecondary} />
-                                </TouchableOpacity>
+                                <RoundButton onPress={() => setOpen(false)} label="Close" size={40}>
+                                    <X size={18} color={colors.text} />
+                                </RoundButton>
                             </View>
                         </View>
 
@@ -164,7 +159,7 @@ export default function NotificationBell({ iconColor }) {
     );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, t) => StyleSheet.create({
     bellBtn: {
         padding: 8,
         position: "relative",
@@ -177,12 +172,12 @@ const getStyles = (colors) => StyleSheet.create({
         height: 16,
         paddingHorizontal: 3,
         borderRadius: 8,
-        backgroundColor: colors.error,
+        backgroundColor: t.ink,
         alignItems: "center",
         justifyContent: "center",
     },
     badgeText: {
-        color: "#FFFFFF",
+        color: t.onInk,
         fontSize: 9,
         fontWeight: "800",
     },
@@ -197,10 +192,10 @@ const getStyles = (colors) => StyleSheet.create({
     panel: {
         width: "92%",
         maxHeight: "70%",
-        backgroundColor: colors.card,
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: colors.border,
+        backgroundColor: t.surface,
+        borderRadius: 28,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: t.outline,
         overflow: "hidden",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 12 },
@@ -212,20 +207,17 @@ const getStyles = (colors) => StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        paddingHorizontal: 16,
+        paddingHorizontal: 20,
         paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
     },
     panelTitle: {
-        fontSize: 16,
-        fontWeight: "700",
+        ...TYPE.sectionTitle,
         color: colors.text,
     },
     panelHeaderActions: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 4,
+        gap: 8,
     },
     markAllBtn: {
         flexDirection: "row",
@@ -239,9 +231,6 @@ const getStyles = (colors) => StyleSheet.create({
         fontWeight: "600",
         color: colors.primary,
     },
-    closeBtn: {
-        padding: 4,
-    },
     empty: {
         alignItems: "center",
         justifyContent: "center",
@@ -254,41 +243,12 @@ const getStyles = (colors) => StyleSheet.create({
     },
     list: {
         maxHeight: 420,
-    },
-    item: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    itemIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    itemBody: {
-        flex: 1,
-        gap: 3,
-    },
-    itemMessage: {
-        fontSize: 13,
-        fontWeight: "500",
-        color: colors.text,
-        lineHeight: 18,
-    },
-    itemTime: {
-        fontSize: 11,
-        color: colors.textSecondary,
+        paddingBottom: 8,
     },
     unreadDot: {
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: colors.primary,
+        backgroundColor: t.ink,
     },
 });

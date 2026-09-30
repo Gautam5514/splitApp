@@ -1,14 +1,14 @@
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { Coins } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 // Live coin balance pill. Hidden until the balance loads to avoid layout flicker.
 export default function CoinBadge() {
-    const { colors } = useTheme();
     const { token } = useAuth();
     const [coins, setCoins] = useState(null);
 
@@ -29,14 +29,31 @@ export default function CoinBadge() {
 
     if (coins == null) return null;
 
+    // Keep the pill compact: show big balances as 2.4k / 1.2M instead of 2450.
+    const label =
+        coins >= 1_000_000 ? `${(coins / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+        : coins >= 1_000 ? `${(coins / 1_000).toFixed(1).replace(/\.0$/, "")}k`
+        : `${coins}`;
+
     return (
         <TouchableOpacity
-            style={styles.pill}
             onPress={() => router.push("/(tabs)/profile")}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`${coins} coins`}
         >
-            <Coins size={15} color="#B45309" />
-            <Text style={styles.text}>{coins}</Text>
+            <LinearGradient
+                colors={["#FDE68A", "#F59E0B", "#D97706"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.pill}
+            >
+                {/* Glossy coin chip */}
+                <View style={styles.coinChip}>
+                    <Coins size={12} color="#FFFFFF" strokeWidth={2.4} />
+                </View>
+                <Text style={styles.text}>{label}</Text>
+            </LinearGradient>
         </TouchableOpacity>
     );
 }
@@ -45,17 +62,35 @@ const styles = StyleSheet.create({
     pill: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 5,
-        paddingHorizontal: 10,
+        gap: 6,
+        paddingLeft: 4,
+        paddingRight: 12,
         height: 32,
         borderRadius: 16,
-        backgroundColor: "#FEF3C7",
-        borderWidth: 1,
-        borderColor: "#FCD34D",
+        // Warm gold glow so it reads as "premium" without a hard border.
+        shadowColor: "#D97706",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    coinChip: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(255,255,255,0.28)",
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: "rgba(255,255,255,0.5)",
     },
     text: {
-        fontSize: 13,
+        fontSize: 13.5,
         fontWeight: "800",
-        color: "#92400E",
+        color: "#FFFFFF",
+        letterSpacing: 0.2,
+        textShadowColor: "rgba(120,53,15,0.35)",
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 1,
     },
 });

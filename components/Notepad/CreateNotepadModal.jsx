@@ -1,21 +1,24 @@
-import { useTheme } from "@/context/ThemeContext";
-import { Loader } from "@/components/Loader";
+import useKeyboard from "@/hooks/useKeyboard";
+import { useModalBackdropPadding } from "@/hooks/useSafeSpacing";
+import { PillButton, PillInput, RoundButton, useDesign } from "@/components/ui/Design";
+import { TYPE } from "@/constants/design";
 import { X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
+    Animated,
     Modal,
     StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 export default function CreateNotepadModal({ isOpen, onConfirm, onCancel, creating }) {
-    const { colors } = useTheme();
+    const { colors, t } = useDesign();
+    const keyboard = useKeyboard();
+    const backdropPadding = useModalBackdropPadding(16);
     const [title, setTitle] = useState("");
 
-    const styles = getStyles(colors);
+    const styles = getStyles(colors, t);
 
     useEffect(() => {
         if (isOpen) setTitle("");
@@ -27,56 +30,49 @@ export default function CreateNotepadModal({ isOpen, onConfirm, onCancel, creati
 
     return (
         <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onCancel}>
-            <View style={styles.overlay}>
+            <Animated.View
+                style={[
+                    styles.overlay,
+                    backdropPadding,
+                    // Lift the card above the keyboard — a Modal window doesn't resize for it.
+                    { paddingBottom: Animated.add(keyboard.anim, backdropPadding.paddingBottom) },
+                ]}
+            >
                 <View style={styles.modalContainer}>
                     <View style={styles.header}>
                         <Text style={styles.headerTitle}>Create New Notepad</Text>
-                        <TouchableOpacity onPress={onCancel}>
-                            <X size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
+                        <RoundButton onPress={onCancel} label="Close" size={40}>
+                            <X size={18} color={colors.text} />
+                        </RoundButton>
                     </View>
 
                     <View style={styles.content}>
                         <Text style={styles.label}>Notepad Title</Text>
-                        <TextInput
+                        <PillInput
                             value={title}
                             onChangeText={setTitle}
                             placeholder="e.g., Trip to the Mountains"
-                            placeholderTextColor={colors.placeholder}
-                            style={styles.input}
                         />
                     </View>
 
                     <View style={styles.footer}>
-                        <TouchableOpacity onPress={onCancel} style={styles.cancelButton}>
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
+                        <PillButton variant="secondary" label="Cancel" onPress={onCancel} style={styles.footerBtn} />
+                        <PillButton
+                            variant="primary"
+                            label={creating ? "Creating..." : "Create Notepad"}
                             onPress={handleSubmit}
                             disabled={creating || !title.trim()}
-                            style={[
-                                styles.submitButton,
-                                (creating || !title.trim()) && styles.submitButtonDisabled,
-                            ]}
-                        >
-                            {creating ? (
-                                <>
-                                    <Loader size={18} color="#fff" />
-                                    <Text style={styles.submitButtonText}>Creating...</Text>
-                                </>
-                            ) : (
-                                <Text style={styles.submitButtonText}>Create Notepad</Text>
-                            )}
-                        </TouchableOpacity>
+                            loading={creating}
+                            style={styles.footerBtn}
+                        />
                     </View>
                 </View>
-            </View>
+            </Animated.View>
         </Modal>
     );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, t) => StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -85,82 +81,38 @@ const getStyles = (colors) => StyleSheet.create({
         padding: 16,
     },
     modalContainer: {
-        backgroundColor: colors.card,
-        borderRadius: 16,
+        backgroundColor: t.surface,
+        borderRadius: 28,
         width: "100%",
         maxWidth: 400,
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: t.outline,
+        padding: 20,
     },
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        marginBottom: 16,
     },
     headerTitle: {
-        fontSize: 16,
-        fontWeight: "600",
+        ...TYPE.sectionTitle,
         color: colors.text,
     },
     content: {
-        padding: 16,
+        marginBottom: 20,
     },
     label: {
-        fontSize: 14,
+        ...TYPE.secondary,
         color: colors.textSecondary,
         marginBottom: 8,
     },
-    input: {
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 14,
-        color: colors.text,
-    },
     footer: {
         flexDirection: "row",
-        justifyContent: "flex-end",
         alignItems: "center",
         gap: 12,
-        padding: 16,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        backgroundColor: colors.background, // Or subtle footer background
-        borderBottomLeftRadius: 16,
-        borderBottomRightRadius: 16,
     },
-    cancelButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-    },
-    cancelButtonText: {
-        fontSize: 14,
-        color: colors.textSecondary,
-    },
-    submitButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        backgroundColor: colors.primary,
-        borderRadius: 8,
-    },
-    submitButtonDisabled: {
-        opacity: 0.6,
-    },
-    submitButtonText: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "white",
+    footerBtn: {
+        flex: 1,
     },
 });

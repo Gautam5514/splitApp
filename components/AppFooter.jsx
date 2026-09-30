@@ -1,5 +1,6 @@
 import { Github, Linkedin, Mail } from "lucide-react-native";
-import { Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Linking, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 export default function AppFooter() {
   return (

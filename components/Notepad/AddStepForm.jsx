@@ -1,26 +1,24 @@
-import { useTheme } from "@/context/ThemeContext";
-import { Loader } from "@/components/Loader";
+import { PillButton, PillInput, useDesign } from "@/components/ui/Design";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Plus } from "lucide-react-native";
+import { Calendar, Plus } from "lucide-react-native";
 import { useState } from "react";
 import {
     Platform,
     StyleSheet,
-    Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 export default function AddStepForm({ onAdd }) {
-    const { colors } = useTheme();
+    const { colors, t } = useDesign();
     const [title, setTitle] = useState("");
     const [notes, setNotes] = useState("");
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    const styles = getStyles(colors);
+    const styles = getStyles(colors, t);
 
     const handleSubmit = async () => {
         if (!title.trim()) return;
@@ -45,28 +43,29 @@ export default function AddStepForm({ onAdd }) {
 
     return (
         <View style={styles.container}>
-            <TextInput
+            <PillInput
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Add a new step (e.g., Book flight tickets)"
                 placeholderTextColor={colors.placeholder}
-                style={styles.input}
             />
 
             <View style={styles.row}>
-                <TextInput
+                <PillInput
+                    style={styles.inputHalf}
                     value={notes}
                     onChangeText={setNotes}
                     placeholder="Notes (optional)"
                     placeholderTextColor={colors.placeholder}
-                    style={[styles.input, styles.inputHalf]}
                 />
 
                 <TouchableOpacity
                     onPress={() => setShowDatePicker(true)}
-                    style={[styles.input, styles.inputHalf, styles.dateButton]}
+                    style={[styles.dateButton, styles.inputHalf]}
+                    activeOpacity={0.8}
                 >
-                    <Text style={styles.dateText}>
+                    <Calendar size={16} color={colors.textSecondary} />
+                    <Text style={styles.dateText} numberOfLines={1}>
                         {date.toLocaleDateString()}
                     </Text>
                 </TouchableOpacity>
@@ -82,44 +81,22 @@ export default function AddStepForm({ onAdd }) {
                 />
             )}
 
-            <TouchableOpacity
-                onPress={handleSubmit}
+            <PillButton
+                variant="primary"
+                loading={loading}
                 disabled={loading || !title.trim()}
-                style={[styles.submitButton, (loading || !title.trim()) && styles.submitButtonDisabled]}
-            >
-                {loading ? (
-                    <>
-                        <Loader size={18} color="#fff" />
-                        <Text style={styles.submitButtonText}>Adding...</Text>
-                    </>
-                ) : (
-                    <>
-                        <Plus size={16} color="white" />
-                        <Text style={styles.submitButtonText}>Add Step</Text>
-                    </>
-                )}
-            </TouchableOpacity>
+                onPress={handleSubmit}
+                icon={<Plus size={16} color={t.onInk} />}
+                label={loading ? "Adding..." : "Add Step"}
+            />
         </View>
     );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, t) => StyleSheet.create({
     container: {
         gap: 12,
-        marginTop: 16,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        paddingTop: 16,
-    },
-    input: {
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 14,
-        color: colors.text,
+        marginTop: 4,
     },
     row: {
         flexDirection: "row",
@@ -129,27 +106,19 @@ const getStyles = (colors) => StyleSheet.create({
         flex: 1,
     },
     dateButton: {
-        justifyContent: "center",
-    },
-    dateText: {
-        fontSize: 14,
-        color: colors.text,
-    },
-    submitButton: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
         gap: 8,
-        backgroundColor: colors.primary,
-        paddingVertical: 12,
-        borderRadius: 8,
+        minHeight: 52,
+        borderRadius: 26,
+        paddingHorizontal: 18,
+        backgroundColor: t.surface,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: t.outline,
     },
-    submitButtonDisabled: {
-        opacity: 0.5,
-    },
-    submitButtonText: {
-        color: "white",
+    dateText: {
         fontSize: 14,
-        fontWeight: "600",
+        color: colors.text,
     },
 });

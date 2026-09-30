@@ -1,21 +1,21 @@
 import { useAuth } from "@/context/AuthContext";
+import { Alert } from "@/lib/alert";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
 import { useGoogleAuth } from "@/lib/googleAuth";
 import { redirectAfterAuth } from "@/lib/pendingInvite";
-import { AUTH_PLACEHOLDER, AuthDivider, AuthScreen, GoogleButton, GradientButton, authStyles } from "@/components/AuthScreenUI";
+import { AuthDivider, AuthScreen, GoogleButton, GradientButton, useAuthStyles } from "@/components/AuthScreenUI";
+import { PillInput, useDesign } from "@/components/ui/Design";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { Eye, EyeOff, MailCheck, ShieldCheck } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    TouchableOpacity,
+    View,
 } from "react-native";
+import { Text, TextInput } from "@/components/ui/Typography";
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
@@ -31,6 +31,8 @@ const getStoredReferralCode = async () => {
 export default function LoginScreen() {
   const { saveToken } = useAuth();
   const { signIn: googleSignIn } = useGoogleAuth();
+  const authStyles = useAuthStyles();
+  const { colors } = useDesign();
   // The login route opens directly on the credentials form.
   const [step, setStep] = useState("login");
 
@@ -38,7 +40,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [focused, setFocused] = useState(null);
 
   // OTP step
   const [otp, setOtp] = useState("");
@@ -194,36 +195,29 @@ export default function LoginScreen() {
           <GoogleButton onPress={onGoogle} disabled={loading} loading={loading} />
           <AuthDivider />
 
-          <TextInput
+          <PillInput
             accessibilityLabel="Email address"
-            style={[authStyles.field, focused === "email" && authStyles.fieldFocused]}
             placeholder="Email address"
-            placeholderTextColor={AUTH_PLACEHOLDER}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
             editable={!loading}
-            onFocus={() => setFocused("email")}
-            onBlur={() => setFocused(null)}
           />
-          <View style={[authStyles.fieldRow, authStyles.fieldGap, focused === "password" && authStyles.fieldFocused]}>
-            <TextInput
-              accessibilityLabel="Password"
-              style={authStyles.fieldInner}
-              placeholder="Password"
-              placeholderTextColor={AUTH_PLACEHOLDER}
-              secureTextEntry={!showPass}
-              value={password}
-              onChangeText={setPassword}
-              editable={!loading}
-              onFocus={() => setFocused("password")}
-              onBlur={() => setFocused(null)}
-            />
-            <TouchableOpacity accessibilityLabel={showPass ? "Hide password" : "Show password"} onPress={() => setShowPass(!showPass)}>
-              {showPass ? <EyeOff size={18} color="#B6BECD" /> : <Eye size={18} color="#B6BECD" />}
-            </TouchableOpacity>
-          </View>
+          <PillInput
+            style={authStyles.fieldGap}
+            accessibilityLabel="Password"
+            placeholder="Password"
+            secureTextEntry={!showPass}
+            value={password}
+            onChangeText={setPassword}
+            editable={!loading}
+            trailing={
+              <TouchableOpacity accessibilityLabel={showPass ? "Hide password" : "Show password"} onPress={() => setShowPass(!showPass)}>
+                {showPass ? <EyeOff size={18} color={colors.textSecondary} /> : <Eye size={18} color={colors.textSecondary} />}
+              </TouchableOpacity>
+            }
+          />
 
           <TouchableOpacity
             style={{ alignSelf: "flex-end", paddingVertical: 16 }}
@@ -242,12 +236,12 @@ export default function LoginScreen() {
 
       {step === "otp" && (
         <View style={authStyles.section}>
-          <View style={{ alignItems: "center", marginBottom: 20 }}><ShieldCheck size={38} color="#83DCF6" /></View>
+          <View style={{ alignItems: "center", marginBottom: 20 }}><ShieldCheck size={38} color={colors.primary} /></View>
           <Text style={authStyles.heading}>Verify it’s you</Text>
           <Text style={authStyles.subtitle}>Enter the 6-digit code sent to {email}</Text>
           <TouchableOpacity activeOpacity={1} onPress={() => otpRef.current?.focus()} style={authStyles.otpRow}>
             {Array.from({ length: OTP_LENGTH }).map((_, i) => (
-              <View key={i} style={[authStyles.otpCell, { borderColor: i === otp.length ? "#82DDF5" : "rgba(255,255,255,0.08)" }]}>
+              <View key={i} style={[authStyles.otpCell, i === otp.length ? authStyles.otpCellActive : authStyles.otpCellIdle]}>
                 <Text style={authStyles.otpDigit}>{otp[i] || ""}</Text>
               </View>
             ))}
@@ -273,18 +267,14 @@ export default function LoginScreen() {
         <View style={authStyles.section}>
           <Text style={authStyles.heading}>Reset password</Text>
           <Text style={[authStyles.subtitle, { marginBottom: 28 }]}>Enter your account email and we’ll send you a secure reset link.</Text>
-          <TextInput
+          <PillInput
             accessibilityLabel="Account email address"
-            style={[authStyles.field, focused === "forgot" && authStyles.fieldFocused]}
             placeholder="Email address"
-            placeholderTextColor={AUTH_PLACEHOLDER}
             value={forgotEmail}
             onChangeText={setForgotEmail}
             autoCapitalize="none"
             keyboardType="email-address"
             editable={!forgotLoading}
-            onFocus={() => setFocused("forgot")}
-            onBlur={() => setFocused(null)}
           />
           <View style={{ marginTop: 20 }}>
             <GradientButton onPress={onForgotSubmit} disabled={forgotLoading} loading={forgotLoading}>Send reset link</GradientButton>
@@ -295,7 +285,7 @@ export default function LoginScreen() {
 
       {step === "forgotSent" && (
         <View style={authStyles.section}>
-          <View style={{ alignItems: "center", marginBottom: 20 }}><MailCheck size={38} color="#83DCF6" /></View>
+          <View style={{ alignItems: "center", marginBottom: 20 }}><MailCheck size={38} color={colors.primary} /></View>
           <Text style={authStyles.heading}>Check your email</Text>
           <Text style={[authStyles.subtitle, { marginBottom: 28 }]}>
             If an account exists for {forgotEmail}, you’ll receive a reset link shortly. The link expires in 15 minutes.

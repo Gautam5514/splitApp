@@ -1,4 +1,6 @@
-import { useTheme } from "@/context/ThemeContext";
+import { useModalBackdropPadding } from "@/hooks/useSafeSpacing";
+import { RoundButton, useDesign } from "@/components/ui/Design";
+import { TYPE } from "@/constants/design";
 import { FileText, X } from "lucide-react-native";
 import {
     Image,
@@ -6,18 +8,18 @@ import {
     Platform,
     ScrollView,
     StyleSheet,
-    Text,
-    TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 export default function OcrViewModal({ ocrText, imageUrl, onClose }) {
-    const { colors } = useTheme();
-    const styles = getStyles(colors);
+    const { colors, t } = useDesign();
+    const backdropPadding = useModalBackdropPadding(16);
+    const styles = getStyles(colors, t);
 
     return (
         <Modal visible={true} transparent animationType="fade" onRequestClose={onClose}>
-            <View style={styles.overlay}>
+            <View style={[styles.overlay, backdropPadding]}>
                 <View style={styles.modalContainer}>
                     {/* Header */}
                     <View style={styles.header}>
@@ -25,9 +27,9 @@ export default function OcrViewModal({ ocrText, imageUrl, onClose }) {
                             <FileText size={20} color={colors.primary} />
                             <Text style={styles.headerTitle}>OCR Receipt Details</Text>
                         </View>
-                        <TouchableOpacity onPress={onClose}>
-                            <X size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
+                        <RoundButton onPress={onClose} label="Close" size={40}>
+                            <X size={18} color={colors.text} />
+                        </RoundButton>
                     </View>
 
                     {/* Content */}
@@ -54,7 +56,7 @@ export default function OcrViewModal({ ocrText, imageUrl, onClose }) {
     );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, t) => StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: "rgba(0, 0, 0, 0.7)",
@@ -63,21 +65,21 @@ const getStyles = (colors) => StyleSheet.create({
         padding: 16,
     },
     modalContainer: {
-        backgroundColor: colors.card,
-        borderRadius: 16,
+        backgroundColor: t.surface,
+        borderRadius: 28,
         width: "100%",
         maxWidth: 600,
         maxHeight: "90%",
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: t.outline,
+        overflow: "hidden",
     },
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
     },
     headerLeft: {
         flexDirection: "row",
@@ -85,18 +87,18 @@ const getStyles = (colors) => StyleSheet.create({
         gap: 8,
     },
     headerTitle: {
-        fontSize: 16,
-        fontWeight: "600",
+        ...TYPE.sectionTitle,
         color: colors.text,
     },
     content: {
-        padding: 20,
+        paddingHorizontal: 20,
+        paddingBottom: 20,
     },
     imageContainer: {
-        borderRadius: 8,
+        borderRadius: 16,
         overflow: "hidden",
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: t.outline,
         marginBottom: 20,
         backgroundColor: "#000", // Image background usually black
     },
@@ -105,10 +107,10 @@ const getStyles = (colors) => StyleSheet.create({
         height: 320,
     },
     textContainer: {
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 12,
+        backgroundColor: t.surfaceAlt,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: t.outline,
+        borderRadius: 16,
         padding: 16,
     },
     ocrText: {

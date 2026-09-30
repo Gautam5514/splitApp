@@ -14,10 +14,10 @@ import {
     Image,
     Pressable,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
@@ -44,7 +44,7 @@ export default function AppHeader({
   };
 
   return (
-    <SafeAreaView style={styles.headerWrapper}>
+    <SafeAreaView style={styles.headerWrapper} edges={["top", "left", "right"]}>
       <View style={styles.headerRow}>
         {/* Brand */}
         <TouchableOpacity onPress={() => router.push("/")} style={styles.brandBox}>

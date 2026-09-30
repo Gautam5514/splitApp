@@ -10,7 +10,7 @@ import {
     useRef,
     useState,
 } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 
 const NotificationContext = createContext({
     notifications: [],
@@ -67,6 +67,7 @@ export function NotificationProvider({ children }) {
 
     // Keep the in-app bell in sync when a system notification arrives or is tapped.
     useEffect(() => {
+        if (Platform.OS === "web") return;
         const received = Notifications.addNotificationReceivedListener(() => {
             setHasUnread(true);
             fetchNotifications();

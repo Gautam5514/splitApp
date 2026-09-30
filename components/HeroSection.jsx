@@ -4,12 +4,12 @@ import { router } from "expo-router";
 import { ArrowRight, Globe, Plane, Sparkles, Wallet } from "lucide-react-native";
 import { useEffect } from "react";
 import {
-  Dimensions,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Dimensions,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 import Animated, {
   Easing,
   interpolate,

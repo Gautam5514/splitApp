@@ -1,5 +1,7 @@
 import { useTheme } from "@/context/ThemeContext";
+import { SECTION_GAP } from "@/constants/layout";
 import { Loader } from "@/components/Loader";
+import { Block, PillButton, useDesign } from "@/components/ui/Design";
 import { api } from "@/lib/api";
 import { WEB_URL } from "@/lib/config";
 import * as Clipboard from "expo-clipboard";
@@ -24,10 +26,10 @@ import {
     Linking,
     Share,
     StyleSheet,
-    Text,
     TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 const SHARE_MESSAGE =
     "Split expenses with friends, hassle-free. Join me on SplitEase and we both earn coins instantly!";
@@ -41,7 +43,8 @@ const STATUS_META = {
 
 export default function ReferralSection() {
     const { colors } = useTheme();
-    const styles = getStyles(colors);
+    const { t } = useDesign();
+    const styles = getStyles(colors, t);
 
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -101,21 +104,21 @@ export default function ReferralSection() {
 
     if (loading) {
         return (
-            <View style={styles.loadingCard}>
+            <Block style={styles.stateCard}>
                 <Loader size={28} />
-            </View>
+            </Block>
         );
     }
 
     if (error || !data) {
         return (
-            <View style={styles.errorCard}>
+            <Block style={styles.stateCard}>
                 <AlertCircle size={24} color={colors.textSecondary} />
                 <Text style={styles.errorText}>Couldn{"'"}t load your referral details.</Text>
                 <TouchableOpacity onPress={fetchData} activeOpacity={0.7}>
                     <Text style={styles.retryText}>Try again</Text>
                 </TouchableOpacity>
-            </View>
+            </Block>
         );
     }
 
@@ -134,11 +137,11 @@ export default function ReferralSection() {
         : 100;
 
     return (
-        <View style={{ gap: 16 }}>
+        <View style={{ gap: SECTION_GAP }}>
             {/* Coin wallet */}
-            <View style={styles.card}>
+            <Block style={styles.card}>
                 <View style={styles.cardTitleRow}>
-                    <Gift size={16} color={colors.primary} />
+                    <Gift size={16} color={colors.text} />
                     <Text style={styles.cardTitle}>Referrals & Rewards</Text>
                 </View>
 
@@ -200,31 +203,32 @@ export default function ReferralSection() {
 
                 {/* Share actions */}
                 <View style={styles.shareRow}>
-                    <TouchableOpacity style={[styles.shareBtn, styles.whatsappBtn]} onPress={shareWhatsApp} activeOpacity={0.85}>
+                    <TouchableOpacity style={[styles.whatsappBtn]} onPress={shareWhatsApp} activeOpacity={0.85}>
                         <MessageCircle size={14} color="#FFFFFF" />
-                        <Text style={styles.shareBtnTextLight}>WhatsApp</Text>
+                        <Text style={styles.whatsappText}>WhatsApp</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.shareBtn, styles.copyBtn]} onPress={copyCode} activeOpacity={0.85}>
-                        {copied ? (
-                            <Check size={14} color={colors.success} strokeWidth={3} />
-                        ) : (
-                            <Copy size={14} color={colors.text} />
-                        )}
-                        <Text style={styles.shareBtnTextDark}>{copied ? "Copied" : "Copy"}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.shareBtn, styles.primaryShareBtn]} onPress={shareLink} activeOpacity={0.85}>
-                        <Share2 size={14} color="#FFFFFF" />
-                        <Text style={styles.shareBtnTextLight}>Share</Text>
-                    </TouchableOpacity>
+                    <PillButton
+                        style={styles.shareBtn}
+                        variant="secondary"
+                        onPress={copyCode}
+                        icon={copied ? <Check size={14} color={colors.success} strokeWidth={3} /> : <Copy size={14} color={colors.text} />}
+                        label={copied ? "Copied" : "Copy"}
+                    />
+                    <PillButton
+                        style={styles.shareBtn}
+                        onPress={shareLink}
+                        icon={<Share2 size={14} color={t.onInk} />}
+                        label="Share"
+                    />
                 </View>
                 <Text style={styles.shareNote}>
                     The moment a friend joins with your link, you both earn coins instantly.
                 </Text>
-            </View>
+            </Block>
 
             {/* Elite Club */}
             {eliteClub?.tier && (
-                <View style={styles.card}>
+                <Block style={styles.card}>
                     <View style={styles.cardTitleRow}>
                         <Trophy size={16} color={colors.warning} />
                         <Text style={styles.cardTitle}>Elite Club</Text>
@@ -244,12 +248,7 @@ export default function ReferralSection() {
 
                     {eliteClub.nextTier && (
                         <View style={styles.progressTrack}>
-                            <LinearGradient
-                                colors={["#06B6D4", "#F59E0B"]}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={[styles.progressFill, { width: `${tierProgressPct}%` }]}
-                            />
+                            <View style={[styles.progressFill, { width: `${tierProgressPct}%`, backgroundColor: t.ink }]} />
                         </View>
                     )}
 
@@ -262,32 +261,34 @@ export default function ReferralSection() {
                             ))}
                         </View>
                     )}
-                </View>
+                </Block>
             )}
 
             {/* Invited friends */}
-            <View style={styles.card}>
+            <Block style={styles.card}>
                 <View style={styles.cardTitleRow}>
-                    <Users size={16} color={colors.primary} />
+                    <Users size={16} color={colors.text} />
                     <Text style={styles.cardTitle}>Invited Friends</Text>
                 </View>
 
                 {invited.length === 0 ? (
                     <View style={styles.invitedEmpty}>
                         <View style={styles.invitedEmptyIcon}>
-                            <Gift size={24} color={colors.primary} />
+                            <Gift size={24} color={colors.text} />
                         </View>
                         <Text style={styles.invitedEmptyTitle}>You haven{"'"}t invited anyone yet</Text>
                         <Text style={styles.invitedEmptyDesc}>
                             Share your link with friends — you{"'"}ll both earn coins instantly when they join.
                         </Text>
-                        <TouchableOpacity style={styles.invitedShareBtn} onPress={shareLink} activeOpacity={0.85}>
-                            <Share2 size={13} color="#FFFFFF" />
-                            <Text style={styles.invitedShareText}>Share your link</Text>
-                        </TouchableOpacity>
+                        <PillButton
+                            style={styles.invitedShareBtn}
+                            onPress={shareLink}
+                            icon={<Share2 size={13} color={t.onInk} />}
+                            label="Share your link"
+                        />
                     </View>
                 ) : (
-                    <View>
+                    <View style={styles.invitedList}>
                         {invited.map((ref) => {
                             const meta = STATUS_META[ref.status] || STATUS_META.pending;
                             const StatusIcon = meta.Icon;
@@ -327,40 +328,17 @@ export default function ReferralSection() {
                         })}
                     </View>
                 )}
-            </View>
+            </Block>
         </View>
     );
 }
 
-const getStyles = (colors) => StyleSheet.create({
-    loadingCard: {
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 16,
-        padding: 32,
-        alignItems: "center",
-    },
-    errorCard: {
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 16,
-        padding: 24,
-        alignItems: "center",
-        gap: 8,
-    },
+const getStyles = (colors, t) => StyleSheet.create({
+    stateCard: { paddingVertical: 28, alignItems: "center", gap: 8 },
     errorText: { fontSize: 14, color: colors.textSecondary, textAlign: "center" },
-    retryText: { fontSize: 13, fontWeight: "700", color: colors.primary },
+    retryText: { fontSize: 13, fontWeight: "700", color: colors.text },
 
-    card: {
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 16,
-        padding: 18,
-        gap: 16,
-    },
+    card: { gap: 16 },
     cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
     cardTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
 
@@ -395,8 +373,8 @@ const getStyles = (colors) => StyleSheet.create({
         borderRadius: 16,
         borderWidth: 2,
         borderStyle: "dashed",
-        borderColor: "rgba(6,182,212,0.3)",
-        backgroundColor: "rgba(6,182,212,0.04)",
+        borderColor: t.outline,
+        backgroundColor: t.surfaceAlt,
         paddingVertical: 16,
         paddingHorizontal: 14,
         alignItems: "center",
@@ -407,33 +385,29 @@ const getStyles = (colors) => StyleSheet.create({
     ticketHint: { fontSize: 11, color: colors.textSecondary, marginTop: 4 },
 
     shareRow: { flexDirection: "row", gap: 8 },
-    shareBtn: {
+    shareBtn: { flex: 1, height: 46, paddingHorizontal: 12 },
+    whatsappBtn: {
         flex: 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
         gap: 6,
-        paddingVertical: 11,
-        borderRadius: 12,
+        height: 46,
+        borderRadius: 23,
+        backgroundColor: "#25D366",
     },
-    whatsappBtn: { backgroundColor: "#25D366" },
-    copyBtn: { borderWidth: 1, borderColor: colors.border },
-    primaryShareBtn: { backgroundColor: colors.primary },
-    shareBtnTextLight: { fontSize: 12, fontWeight: "700", color: "#FFFFFF" },
-    shareBtnTextDark: { fontSize: 12, fontWeight: "700", color: colors.text },
+    whatsappText: { fontSize: 14, fontWeight: "600", color: "#FFFFFF" },
     shareNote: { fontSize: 11, color: colors.textSecondary, textAlign: "center", marginTop: -4 },
 
     eliteHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     rowCenter: { flexDirection: "row", alignItems: "center", gap: 8 },
     eliteTierName: { fontSize: 14, fontWeight: "700", color: colors.text },
     eliteToNext: { fontSize: 12, color: colors.textSecondary },
-    progressTrack: { height: 8, borderRadius: 4, backgroundColor: colors.inputBackground, overflow: "hidden" },
+    progressTrack: { height: 8, borderRadius: 4, backgroundColor: t.surfaceAlt, overflow: "hidden" },
     progressFill: { height: "100%", borderRadius: 4 },
     perksRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
     perkChip: {
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
+        backgroundColor: t.surfaceAlt,
         borderRadius: 20,
         paddingHorizontal: 10,
         paddingVertical: 4,
@@ -445,39 +419,26 @@ const getStyles = (colors) => StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: colors.primaryLight,
+        backgroundColor: t.surfaceAlt,
         justifyContent: "center",
         alignItems: "center",
     },
     invitedEmptyTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
     invitedEmptyDesc: { fontSize: 12, color: colors.textSecondary, textAlign: "center", maxWidth: 260 },
-    invitedShareBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        backgroundColor: colors.primary,
-        paddingHorizontal: 16,
-        paddingVertical: 9,
-        borderRadius: 10,
-        marginTop: 4,
-    },
-    invitedShareText: { fontSize: 12, fontWeight: "700", color: "#FFFFFF" },
+    invitedShareBtn: { marginTop: 4, paddingHorizontal: 22 },
 
+    invitedList: { gap: 4 },
     invitedItem: {
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
+        paddingVertical: 8,
     },
     invitedAvatar: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
+        backgroundColor: t.surfaceAlt,
         justifyContent: "center",
         alignItems: "center",
         overflow: "hidden",

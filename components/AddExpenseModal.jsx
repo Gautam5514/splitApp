@@ -1,31 +1,48 @@
-import { useTheme } from "@/context/ThemeContext";
-import { Loader } from "@/components/Loader";
+import useKeyboard from "@/hooks/useKeyboard";
+import { Alert } from "@/lib/alert";
+import { useModalBackdropPadding } from "@/hooks/useSafeSpacing";
+import { PillButton, PillInput, RoundButton, useDesign } from "@/components/ui/Design";
+import { TYPE } from "@/constants/design";
 import { api } from "@/lib/api";
+import { categoriesForGroup, categoryMeta } from "@/lib/groupPresets";
 import * as ImagePicker from "expo-image-picker";
-import { Image as ImageIcon, Wallet2, X } from "lucide-react-native";
+import { ImagePlus, Plus, Trash2, X } from "lucide-react-native";
 import { useState } from "react";
-import {
-    Alert,
-    Modal,
-    Image as RNImage,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from "react-native";
+import { Animated, Image as RNImage, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
-export default function AddExpenseModal({ group, onClose, onSuccess, initialDescription = "", initialCategory = "general" }) {
-    const { colors } = useTheme();
+const CURRENCY_SYMBOL = { INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
+
+/**
+ * Add expense - kept deliberately simple (same as web): what it was for, how
+ * much, a category and an optional bill photo. You are always the payer, and
+ * the split is the one chosen when the group was created.
+ */
+export default function AddExpenseModal({ group, onClose, onSuccess, initialDescription = "", initialCategory }) {
+    const { colors, t } = useDesign();
+    const keyboard = useKeyboard();
+    const backdropPadding = useModalBackdropPadding(20);
+    const styles = getStyles(colors, t);
+
+    const categories = categoriesForGroup(group);
+    const currency = group?.settings?.currency || "INR";
+    const symbol = CURRENCY_SYMBOL[currency] || currency;
+    const receiptRequired = !!group?.settings?.receiptRequired;
+    const memberCount = group?.members?.length || 1;
+    const splitType = group?.settings?.defaultSplit?.type || "equal";
+    const splitText = splitType === "shares" ? "by shares" : splitType === "percent" ? "by percentage" : "equally";
+
     const [description, setDescription] = useState(initialDescription);
     const [amount, setAmount] = useState("");
-    const [category, setCategory] = useState(initialCategory);
+    const [category, setCategory] = useState(
+        initialCategory && categories.includes(initialCategory) ? initialCategory : categories[0] || "general"
+    );
     const [imageUri, setImageUri] = useState(null);
     const [imageBase64, setImageBase64] = useState(null);
+    const [notes, setNotes] = useState("");
+    const [showNotes, setShowNotes] = useState(false);
     const [loading, setLoading] = useState(false);
-
-    const styles = getStyles(colors);
+    const [errors, setErrors] = useState({});
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -34,373 +51,194 @@ export default function AddExpenseModal({ group, onClose, onSuccess, initialDesc
             quality: 0.5,
             base64: true,
         });
-
         if (!result.canceled && result.assets[0]) {
             const asset = result.assets[0];
             setImageUri(asset.uri);
-            // Use the base64 the native picker already produced instead of
-            // re-reading the file through fetch()/Blob/FileReader on the JS
-            // thread, which was blocking the UI (and any in-progress scroll)
-            // for the full duration of a multi-MB base64 re-encode.
-            const mime = asset.mimeType || "image/jpeg";
-            setImageBase64(`data:${mime};base64,${asset.base64}`);
+            setImageBase64(`data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`);
+            setErrors((e) => ({ ...e, fileUrl: "" }));
         }
     };
 
+    const validate = () => {
+        const e = {};
+        const amt = parseFloat(amount);
+        if (!description.trim()) e.description = "What was it for?";
+        if (!amount) e.amount = "Enter the amount.";
+        else if (!(amt > 0)) e.amount = "Amount must be more than 0.";
+        else if (amt > 9999999) e.amount = "That amount is too large.";
+        if (receiptRequired && !imageBase64) e.fileUrl = "This group needs a bill photo.";
+        setErrors(e);
+        return Object.keys(e).length === 0;
+    };
+
     const handleSubmit = async () => {
-        if (!description.trim() || !amount) {
-            return;
-        }
-
-        if (parseFloat(amount) <= 0) {
-            return;
-        }
-
+        if (!validate()) return;
         try {
             setLoading(true);
             let fileUrl = null;
-
             if (imageBase64) {
                 try {
-                    // The shared `api` client has a 15s timeout tuned for normal
-                    // JSON calls. A base64-encoded receipt photo has to travel
-                    // client -> our server -> Cloudinary -> our server -> client,
-                    // which routinely takes longer than that on real mobile
-                    // networks - so it was timing out silently and the whole
-                    // expense never got created. Give this one call more room.
-                    const uploadRes = await api.post(
-                        "/upload",
-                        {
-                            file: imageBase64,
-                            folder: "splitwise_receipts",
-                            resourceType: "auto",
-                        },
-                        { timeout: 60000 }
-                    );
-
+                    // Receipt uploads go client -> server -> Cloudinary; give them
+                    // more room than the default 15s JSON timeout.
+                    const uploadRes = await api.post("/upload", { file: imageBase64, folder: "splitwise_receipts", resourceType: "auto" }, { timeout: 60000 });
                     fileUrl = uploadRes.data?.url;
                 } catch (uploadErr) {
-                    console.error("Receipt upload failed:", uploadErr);
                     const isTimeout = uploadErr?.code === "ECONNABORTED";
                     Alert.alert(
                         "Couldn't upload image",
-                        isTimeout
-                            ? "The upload timed out - check your connection and try again, or add the expense without a receipt."
-                            : uploadErr?.response?.data?.message ||
-                                  "The receipt image couldn't be uploaded. Try again or add the expense without it."
+                        isTimeout ? "The upload timed out - check your connection and try again." : uploadErr?.response?.data?.message || "Try again."
                     );
                     setLoading(false);
                     return;
                 }
             }
-
+            // No payer / split: the server records me as the payer and applies
+            // the group's own split.
             await api.post("/expenses", {
                 groupId: group._id,
                 description: description.trim(),
                 amount: parseFloat(amount),
-                splitType: "equal",
                 category,
+                notes: notes.trim(),
                 fileUrl,
             });
-
             onSuccess();
             onClose();
         } catch (err) {
-            console.error("Failed to add expense:", err);
-            Alert.alert(
-                "Couldn't add expense",
-                err?.response?.data?.message || "Something went wrong. Please try again."
-            );
+            const data = err?.response?.data;
+            if (data?.field) setErrors((p) => ({ ...p, [data.field]: data.message }));
+            else Alert.alert("Couldn't add expense", data?.message || "Something went wrong. Please try again.");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Modal visible={true} transparent animationType="fade" onRequestClose={onClose}>
-            <View style={styles.overlay}>
-                <View style={styles.modalContainer}>
-                    {/* Close Button */}
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <X size={22} color={colors.textSecondary} />
-                    </TouchableOpacity>
-
-                    {/* Header */}
+        <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+            <Animated.View style={[styles.overlay, backdropPadding, { paddingBottom: Animated.add(keyboard.anim, backdropPadding.paddingBottom) }]}>
+                <View style={styles.card}>
                     <View style={styles.header}>
-                        <View style={styles.headerContent}>
-                            <Wallet2 size={22} color={colors.primary} />
-                            <Text style={styles.headerTitle}>Add New Expense</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.title}>Add expense</Text>
+                            <Text style={styles.subtitle} numberOfLines={1}>
+                                You paid · split {splitText} among {memberCount} in <Text style={{ color: colors.text, fontWeight: "600" }}>{group?.name}</Text>
+                            </Text>
                         </View>
-                        <Text style={styles.headerSubtitle}>
-                            Split equally among members of{" "}
-                            <Text style={styles.groupName}>{group?.name}</Text>.
-                        </Text>
+                        <RoundButton onPress={onClose} label="Close" size={38}><X size={17} color={colors.text} /></RoundButton>
                     </View>
 
-                    {/* Form */}
-                    <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
-                        {/* Description */}
-                        <View style={styles.formGroup}>
+                    <ScrollView style={styles.form} contentContainerStyle={{ gap: 16, paddingBottom: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                        <View>
                             <Text style={styles.label}>Description</Text>
-                            <TextInput
-                                placeholder="E.g. Dinner, Cab Ride"
-                                placeholderTextColor={colors.placeholder}
-                                style={styles.input}
-                                value={description}
-                                onChangeText={setDescription}
-                            />
+                            <PillInput placeholder="e.g. Dinner, Cab ride" value={description} maxLength={200} autoFocus
+                                onChangeText={(v) => { setDescription(v); setErrors((e) => ({ ...e, description: "" })); }} />
+                            {errors.description ? <Text style={styles.error}>{errors.description}</Text> : null}
                         </View>
 
-                        {/* Amount */}
-                        <View style={styles.formGroup}>
-                            <Text style={styles.label}>Amount (₹)</Text>
-                            <TextInput
-                                placeholder="Enter amount"
-                                placeholderTextColor={colors.placeholder}
-                                keyboardType="numeric"
-                                style={styles.input}
-                                value={amount}
-                                onChangeText={setAmount}
-                            />
+                        <View>
+                            <Text style={styles.label}>Amount</Text>
+                            <PillInput placeholder="0" keyboardType="decimal-pad" value={amount}
+                                icon={<Text style={styles.symbol}>{symbol}</Text>}
+                                inputStyle={{ fontWeight: "700" }}
+                                onChangeText={(v) => { setAmount(v.replace(/[^0-9.]/g, "")); setErrors((e) => ({ ...e, amount: "" })); }} />
+                            {errors.amount ? <Text style={styles.error}>{errors.amount}</Text> : null}
                         </View>
 
-                        {/* Category */}
-                        <View style={styles.formGroup}>
+                        <View>
                             <Text style={styles.label}>Category</Text>
-                            <View style={styles.pickerContainer}>
-                                <Text style={styles.pickerText}>{category}</Text>
-                            </View>
-                            <View style={styles.categoryButtons}>
-                                {["general", "food", "travel", "stay", "shopping", "bills"].map((cat) => (
-                                    <TouchableOpacity
-                                        key={cat}
-                                        onPress={() => setCategory(cat)}
-                                        style={[
-                                            styles.categoryButton,
-                                            category === cat && styles.categoryButtonActive,
-                                        ]}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.categoryButtonText,
-                                                category === cat && styles.categoryButtonTextActive,
-                                            ]}
-                                        >
-                                            {cat}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
+                            <View style={styles.chips}>
+                                {categories.map((c) => {
+                                    const { label, Icon } = categoryMeta(c);
+                                    const on = category === c;
+                                    return (
+                                        <TouchableOpacity key={c} onPress={() => setCategory(c)} activeOpacity={0.8}
+                                            style={[styles.chip, on && { backgroundColor: t.ink, borderColor: t.ink }]} accessibilityState={{ selected: on }}>
+                                            <Icon size={13} color={on ? t.onInk : colors.textSecondary} />
+                                            <Text style={[styles.chipText, on && { color: t.onInk }]}>{label}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             </View>
                         </View>
 
-                        {/* Upload */}
-                        <View style={styles.formGroup}>
-                            <Text style={styles.label}>Upload Bill / Receipt (optional)</Text>
-                            <TouchableOpacity onPress={pickImage} style={styles.uploadContainer}>
-                                <ImageIcon size={20} color={colors.textSecondary} />
-                                <Text style={styles.uploadText}>
-                                    {imageUri ? "Change Image" : "Pick an image"}
-                                </Text>
-                            </TouchableOpacity>
-                            {imageUri && (
-                                <RNImage source={{ uri: imageUri }} style={styles.preview} />
+                        <View>
+                            <Text style={styles.label}>Bill / receipt {receiptRequired ? "(required)" : "(optional)"}</Text>
+                            {imageUri ? (
+                                <View style={styles.fileRow}>
+                                    <RNImage source={{ uri: imageUri }} style={styles.thumb} />
+                                    <Text style={styles.fileText} numberOfLines={1}>Bill photo added</Text>
+                                    <TouchableOpacity onPress={() => { setImageUri(null); setImageBase64(null); }} hitSlop={8} accessibilityLabel="Remove bill photo">
+                                        <Trash2 size={16} color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <TouchableOpacity onPress={pickImage} activeOpacity={0.8}
+                                    style={[styles.dropzone, errors.fileUrl && { borderColor: colors.error }]}>
+                                    <ImagePlus size={17} color={errors.fileUrl ? colors.error : colors.textSecondary} />
+                                    <Text style={[styles.dropText, errors.fileUrl && { color: colors.error }]}>Add bill photo</Text>
+                                </TouchableOpacity>
                             )}
+                            {errors.fileUrl ? <Text style={styles.error}>{errors.fileUrl}</Text> : null}
                         </View>
+
+                        {showNotes ? (
+                            <View>
+                                <Text style={styles.label}>Note</Text>
+                                <PillInput multiline placeholder="Anything to remember - e.g. invoice no." value={notes} onChangeText={setNotes} maxLength={500} autoFocus />
+                            </View>
+                        ) : (
+                            <TouchableOpacity onPress={() => setShowNotes(true)} style={styles.noteBtn} activeOpacity={0.8}>
+                                <Plus size={14} color={colors.textSecondary} />
+                                <Text style={styles.noteText}>Add note</Text>
+                            </TouchableOpacity>
+                        )}
                     </ScrollView>
 
-                    {/* Buttons */}
                     <View style={styles.footer}>
-                        <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={handleSubmit}
-                            disabled={loading}
-                            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader size={18} color="#fff" />
-                                    <Text style={styles.submitButtonText}>Uploading...</Text>
-                                </>
-                            ) : (
-                                <Text style={styles.submitButtonText}>Add Expense</Text>
-                            )}
-                        </TouchableOpacity>
+                        <PillButton variant="secondary" label="Cancel" onPress={onClose} style={{ flex: 1 }} />
+                        <PillButton variant="primary" label={loading ? (imageBase64 ? "Uploading…" : "Saving…") : "Add expense"}
+                            onPress={handleSubmit} loading={loading} disabled={loading} style={{ flex: 1.4 }} />
                     </View>
                 </View>
-            </View>
+            </Animated.View>
         </Modal>
     );
 }
 
-const getStyles = (colors) => StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
+const getStyles = (colors, t) => StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 16 },
+    card: {
+        backgroundColor: colors.background, borderRadius: 28, width: "100%", maxWidth: 500, maxHeight: "92%",
+        borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
     },
-    modalContainer: {
-        backgroundColor: colors.card,
-        borderRadius: 16,
-        width: "100%",
-        maxWidth: 500,
-        maxHeight: "90%",
-        borderWidth: 1,
-        borderColor: colors.border,
+    header: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 },
+    title: { ...TYPE.sectionTitle, color: colors.text },
+    subtitle: { fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
+    form: { paddingHorizontal: 20, paddingTop: 12 },
+    label: { fontSize: 12.5, fontWeight: "600", color: colors.textSecondary, marginBottom: 7 },
+    error: { fontSize: 12, color: colors.error, marginTop: 5, marginLeft: 4 },
+    symbol: { fontSize: 16, fontWeight: "700", color: colors.textSecondary },
+    chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+    chip: {
+        flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
+        backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
     },
-    closeButton: {
-        position: "absolute",
-        top: 12,
-        right: 12,
-        zIndex: 10,
-        padding: 8,
+    chipText: { fontSize: 12.5, fontWeight: "600", color: colors.text },
+    dropzone: {
+        height: 52, borderRadius: 26, borderWidth: 1, borderStyle: "dashed", borderColor: t.outline,
+        flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     },
-    header: {
-        padding: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        backgroundColor: colors.inputBackground, // Light grey in light mode, darker in dark mode
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
+    dropText: { fontSize: 14, fontWeight: "600", color: colors.textSecondary },
+    fileRow: {
+        height: 52, borderRadius: 26, paddingLeft: 6, paddingRight: 16, flexDirection: "row", alignItems: "center", gap: 10,
+        backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
     },
-    headerContent: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        marginBottom: 4,
+    thumb: { width: 40, height: 40, borderRadius: 20 },
+    fileText: { flex: 1, fontSize: 13.5, color: colors.text },
+    noteBtn: {
+        alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7,
+        borderRadius: 999, borderWidth: 1, borderColor: t.outline,
     },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: colors.text,
-    },
-    headerSubtitle: {
-        fontSize: 14,
-        color: colors.textSecondary,
-    },
-    groupName: {
-        fontWeight: "600",
-        color: colors.primary,
-    },
-    form: {
-        padding: 20,
-    },
-    formGroup: {
-        marginBottom: 16,
-    },
-    label: {
-        fontSize: 14,
-        color: colors.textSecondary,
-        marginBottom: 8,
-    },
-    input: {
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 14,
-        color: colors.text,
-    },
-    pickerContainer: {
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 8,
-    },
-    pickerText: {
-        fontSize: 14,
-        color: colors.text,
-        textTransform: "capitalize",
-    },
-    categoryButtons: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: 8,
-    },
-    categoryButton: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.card,
-    },
-    categoryButtonActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-    },
-    categoryButtonText: {
-        fontSize: 12,
-        color: colors.textSecondary,
-        textTransform: "capitalize",
-    },
-    categoryButtonTextActive: {
-        color: "white",
-    },
-    uploadContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        padding: 16,
-        backgroundColor: colors.inputBackground,
-    },
-    uploadText: {
-        fontSize: 14,
-        color: colors.textSecondary,
-    },
-    preview: {
-        width: "100%",
-        height: 160,
-        borderRadius: 8,
-        marginTop: 12,
-        resizeMode: "contain",
-    },
-    footer: {
-        flexDirection: "row",
-        justifyContent: "flex-end",
-        gap: 12,
-        padding: 20,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    cancelButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-    },
-    cancelButtonText: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: colors.textSecondary,
-    },
-    submitButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        backgroundColor: colors.primary,
-        borderRadius: 8,
-    },
-    submitButtonDisabled: {
-        opacity: 0.6,
-    },
-    submitButtonText: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "white",
-    },
+    noteText: { fontSize: 12.5, fontWeight: "600", color: colors.textSecondary },
+    footer: { flexDirection: "row", gap: 10, padding: 16, paddingTop: 12 },
 });

@@ -1,19 +1,22 @@
+import { useTabScreenBottomPadding } from "@/hooks/useSafeSpacing";
+import { Alert } from "@/lib/alert";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { connectSocket } from "@/lib/socket";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
-import { CheckCircle2, Circle, Search, Trash2, Users, X } from "lucide-react-native";
+import { CheckCircle2, Circle, Trash2, Users, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
-    Alert,
     FlatList,
     StyleSheet,
-    Text,
-    TextInput,
+    Image,
     TouchableOpacity,
     View,
 } from "react-native";
+import { Text } from "@/components/ui/Typography";
+import { SCREEN_GUTTER, inkTokens } from "@/constants/layout";
+import { RowListSkeleton } from "@/components/ui/Skeleton";
 
 const GRADIENTS = [
     ["#0891B2", "#14B8A6"],
@@ -24,15 +27,27 @@ const GRADIENTS = [
 ];
 const gradientFor = (name) => GRADIENTS[(name?.charCodeAt(0) || 0) % GRADIENTS.length];
 
-export default function GroupChatList({ onSelect }) {
-    const { colors } = useTheme();
+const fmtTime = (d) => {
+    if (!d) return "";
+    const date = new Date(d), now = new Date();
+    if (date.toDateString() === now.toDateString())
+        return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const yest = new Date(now.getTime() - 86400000);
+    if (date.toDateString() === yest.toDateString()) return "Yesterday";
+    return date.toLocaleDateString([], { day: "numeric", month: "short" });
+};
+
+// `query` and `activeOnly` come from the Messages screen (shared search + filter).
+export default function GroupChatList({ onSelect, query = "", activeOnly = false }) {
+    const { colors, theme } = useTheme();
+    const tabBottomPadding = useTabScreenBottomPadding();
     const [groups, setGroups] = useState([]);
-    const [searchQuery, setSearchQuery] = useState("");
     const [selectMode, setSelectMode] = useState(false);
     const [selected, setSelected] = useState([]);
     const [deleting, setDeleting] = useState(false);
+    const [loading, setLoading] = useState(true); // skeleton, not "No group chats", while fetching
 
-    const styles = getStyles(colors);
+    const styles = getStyles(colors, inkTokens(theme === "dark", colors));
 
     const toggleSelect = (id) =>
         setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -69,7 +84,11 @@ export default function GroupChatList({ onSelect }) {
         const loadCached = async () => {
             try {
                 const cached = await AsyncStorage.getItem("groups_cache_v1");
-                if (cached) setGroups(JSON.parse(cached) || []);
+                if (cached) {
+                    const items = JSON.parse(cached) || [];
+                    setGroups(items);
+                    if (items.length) setLoading(false);
+                }
             } catch (err) {
                 console.error("Error loading cached groups:", err);
             }
@@ -81,6 +100,8 @@ export default function GroupChatList({ onSelect }) {
                 await AsyncStorage.setItem("groups_cache_v1", JSON.stringify(res.data || []));
             } catch (err) {
                 console.error("Error loading groups:", err);
+            } finally {
+                setLoading(false);
             }
         };
         loadCached();
@@ -88,7 +109,11 @@ export default function GroupChatList({ onSelect }) {
         connectSocket();
     }, []);
 
-    const filteredGroups = groups.filter((g) => g.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+    const q = query.trim().toLowerCase();
+    const isDone = (g) => g?.isCompleted === true || g?.isCompleted === "true";
+    const filteredGroups = groups.filter(
+        (g) => (!q || g.name?.toLowerCase().includes(q)) && (!activeOnly || !isDone(g))
+    );
 
     const renderItem = ({ item: group }) => {
         const isSelected = selected.includes(group._id);
@@ -107,18 +132,24 @@ export default function GroupChatList({ onSelect }) {
                         {isSelected ? <CheckCircle2 size={22} color={colors.primary} /> : <Circle size={22} color={colors.textSecondary} />}
                     </View>
                 )}
-                <LinearGradient colors={[g1, g2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
-                    <Text style={styles.avatarText}>{group.name?.charAt(0)?.toUpperCase()}</Text>
-                </LinearGradient>
+                {group.photo?.url ? (
+                    <Image source={{ uri: group.photo.url }} style={styles.avatarImg} />
+                ) : (
+                    <LinearGradient colors={[g1, g2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
+                        <Text style={styles.avatarText}>{group.name?.charAt(0)?.toUpperCase()}</Text>
+                    </LinearGradient>
+                )}
 
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{group.name}</Text>
-                    <View style={styles.metaRow}>
-                        <Users size={12} color={colors.textSecondary} />
-                        <Text style={styles.meta} numberOfLines={1}>
-                            {group.members?.length || 0} members{names.length ? ` · ${names.slice(0, 2).join(", ")}` : ""}
-                        </Text>
-                    </View>
+                    <Text style={styles.meta} numberOfLines={1}>
+                        {names.length ? names.slice(0, 3).join(", ") : "No members yet"}
+                    </Text>
+                </View>
+
+                <View style={styles.right}>
+                    <Text style={styles.time}>{fmtTime(group.lastMessageAt || group.updatedAt)}</Text>
+                    <View style={styles.badgeSpacer} />
                 </View>
             </TouchableOpacity>
         );
@@ -126,34 +157,15 @@ export default function GroupChatList({ onSelect }) {
 
     return (
         <View style={styles.container}>
-            {selectMode ? (
+            {selectMode && (
                 <View style={styles.selectHeader}>
-                    <TouchableOpacity onPress={exitSelect} style={styles.iconBtn} activeOpacity={0.7}>
+                    <TouchableOpacity onPress={exitSelect} style={styles.iconBtn} activeOpacity={0.7} accessibilityLabel="Cancel selection">
                         <X size={22} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={styles.selectCount}>{selected.length} selected</Text>
-                    <TouchableOpacity onPress={deleteSelected} style={styles.iconBtn} activeOpacity={0.7} disabled={deleting || !selected.length}>
+                    <TouchableOpacity onPress={deleteSelected} style={styles.iconBtn} activeOpacity={0.7} disabled={deleting || !selected.length} accessibilityLabel="Clear selected group chats">
                         <Trash2 size={21} color={selected.length ? colors.error : colors.textSecondary} />
                     </TouchableOpacity>
-                </View>
-            ) : (
-                <View style={styles.searchWrap}>
-                    <View style={styles.searchBox}>
-                        <Search size={18} color={colors.textSecondary} />
-                        <TextInput
-                            placeholder="Search groups"
-                            placeholderTextColor={colors.placeholder}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            style={styles.searchInput}
-                            selectionColor={colors.primary}
-                        />
-                        {searchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setSearchQuery("")}>
-                                <X size={16} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                        )}
-                    </View>
                 </View>
             )}
 
@@ -162,56 +174,58 @@ export default function GroupChatList({ onSelect }) {
                 keyExtractor={(item) => item._id}
                 renderItem={renderItem}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 150, paddingTop: 4 }}
+                contentContainerStyle={{ paddingBottom: tabBottomPadding, paddingTop: 4 }}
                 initialNumToRender={12}
                 windowSize={11}
                 removeClippedSubviews
-                extraData={selected.length}
-                ListEmptyComponent={
+                extraData={`${selected.length}-${theme}`}
+                ListEmptyComponent={loading ? <RowListSkeleton count={8} /> : (
                     <View style={styles.empty}>
-                        <View style={styles.emptyIcon}><Users size={26} color={colors.primary} /></View>
-                        <Text style={styles.emptyTitle}>No group chats</Text>
-                        <Text style={styles.emptyText}>Create a group from the Home tab to start chatting.</Text>
+                        <View style={styles.emptyIcon}><Users size={26} color={colors.text} /></View>
+                        <Text style={styles.emptyTitle}>{q || activeOnly ? "No matching groups" : "No group chats"}</Text>
+                        <Text style={styles.emptyText}>
+                            {q || activeOnly ? "Try a different search or turn off the filter." : "Create a group from the Trips tab to start chatting."}
+                        </Text>
                     </View>
-                }
+                )}
             />
         </View>
     );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, c) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
 
-    searchWrap: { paddingHorizontal: 16, paddingVertical: 10 },
-    searchBox: {
-        flexDirection: "row", alignItems: "center", gap: 10,
-        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-        borderRadius: 12, paddingHorizontal: 14, height: 44,
-    },
-    searchInput: { flex: 1, fontSize: 14.5, color: colors.text },
-
     selectHeader: {
-        height: 56, paddingHorizontal: 8, flexDirection: "row", alignItems: "center",
-        justifyContent: "space-between", backgroundColor: colors.card,
-        borderBottomWidth: 1, borderBottomColor: colors.border,
+        height: 56, marginHorizontal: SCREEN_GUTTER, marginBottom: 6, paddingHorizontal: 4,
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        borderRadius: 28, backgroundColor: c.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: c.outline,
     },
-    iconBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-    selectCount: { fontSize: 16, fontWeight: "700", color: colors.text },
+    iconBtn: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+    selectCount: { fontSize: 15.5, fontWeight: "600", color: colors.text },
 
-    row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 10 },
+    row: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: SCREEN_GUTTER, paddingVertical: 11 },
     rowSelected: { backgroundColor: colors.primaryLight },
     check: { marginRight: 2 },
 
-    avatar: { width: 52, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-    avatarText: { fontSize: 21, fontWeight: "800", color: "#fff" },
+    avatar: { width: 50, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+    avatarImg: { width: 50, height: 50, borderRadius: 25 },
+    avatarText: { fontSize: 19, fontWeight: "700", color: "#fff" },
 
-    info: { flex: 1, borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10, justifyContent: "center", gap: 4 },
-    name: { fontSize: 16, fontWeight: "700", color: colors.text },
-    metaRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-    meta: { fontSize: 13, color: colors.textSecondary, flex: 1 },
+    info: { flex: 1, justifyContent: "center", gap: 5 },
+    name: { fontSize: 16.5, fontWeight: "500", color: colors.text, letterSpacing: -0.2 },
+    meta: { fontSize: 13.5, color: colors.textSecondary },
 
-    empty: { alignItems: "center", paddingTop: 80, paddingHorizontal: 40 },
-    emptyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center", marginBottom: 14 },
-    emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginBottom: 4 },
+    right: { alignItems: "flex-end", justifyContent: "center", gap: 7, minWidth: 56 },
+    time: { fontSize: 12, color: colors.textSecondary },
+    badgeSpacer: { height: 22 },
+
+    empty: { alignItems: "center", paddingTop: 72, paddingHorizontal: 40 },
+    emptyIcon: {
+        width: 64, height: 64, borderRadius: 32, backgroundColor: c.surface,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: c.outline,
+        alignItems: "center", justifyContent: "center", marginBottom: 14,
+    },
+    emptyTitle: { fontSize: 16.5, fontWeight: "600", color: colors.text, marginBottom: 4 },
     emptyText: { fontSize: 13.5, color: colors.textSecondary, textAlign: "center", lineHeight: 19 },
 });

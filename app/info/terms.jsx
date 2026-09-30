@@ -1,4 +1,4 @@
-import InfoPageLayout from "@/components/InfoPageLayout";
+import InfoPageLayout from "@/components/AuthInfoPageLayout";
 import { FileText } from "lucide-react-native";
 
 const sections = [

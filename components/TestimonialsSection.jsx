@@ -1,7 +1,8 @@
 import { useTheme } from "@/context/ThemeContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { BadgeCheck, Globe, MapPin, Quote, Star } from "lucide-react-native";
-import { Dimensions, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Dimensions, Image, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 const { width } = Dimensions.get("window");
 

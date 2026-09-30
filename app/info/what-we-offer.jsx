@@ -1,7 +1,9 @@
-import { useTheme } from "@/context/ThemeContext";
+import { Block, IconCircle, PillButton, ScreenHeader, useDesign } from "@/components/ui/Design";
+import { Text } from "@/components/ui/Typography";
+import { SCREEN_GUTTER } from "@/constants/layout";
+import { useBottomSpacing } from "@/hooks/useSafeSpacing";
 import { router } from "expo-router";
 import {
-    ArrowLeft,
     Calculator,
     Coins,
     Link2,
@@ -12,7 +14,7 @@ import {
     Wallet,
     Zap,
 } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const FEATURES = [
@@ -39,20 +41,16 @@ const TIERS = [
 ];
 
 export default function WhatWeOfferScreen() {
-    const { colors } = useTheme();
+    const { colors, t } = useDesign();
+    const bottomSpacing = useBottomSpacing(32);
     const styles = getStyles(colors);
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-                    <ArrowLeft size={20} color={colors.text} />
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader title="What we offer" back />
 
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-                <Text style={styles.eyebrow}>What we offer</Text>
-                <Text style={styles.title}>Everything to split smarter</Text>
+            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
+                <Text style={styles.eyebrow}>Everything to split smarter</Text>
                 <Text style={styles.description}>
                     From AI receipt scanning to one-tap settlement and rewards, SplitEase covers the whole journey.
                 </Text>
@@ -61,15 +59,15 @@ export default function WhatWeOfferScreen() {
                 {FEATURES.map((f) => {
                     const Icon = f.icon;
                     return (
-                        <View key={f.title} style={styles.card}>
-                            <View style={styles.cardIcon}>
+                        <Block key={f.title} style={styles.rowBlock}>
+                            <IconCircle size={44}>
                                 <Icon size={20} color={colors.primary} />
-                            </View>
+                            </IconCircle>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.cardTitle}>{f.title}</Text>
                                 <Text style={styles.cardDesc}>{f.desc}</Text>
                             </View>
-                        </View>
+                        </Block>
                     );
                 })}
 
@@ -77,40 +75,42 @@ export default function WhatWeOfferScreen() {
                 {REFERRAL_STEPS.map((s, i) => {
                     const Icon = s.icon;
                     return (
-                        <View key={s.title} style={styles.card}>
-                            <View style={styles.cardIcon}>
+                        <Block key={s.title} style={styles.rowBlock}>
+                            <IconCircle size={44}>
                                 <Icon size={20} color={colors.primary} />
-                            </View>
+                            </IconCircle>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.cardTitle}>
                                     {i + 1}. {s.title}
                                 </Text>
                                 <Text style={styles.cardDesc}>{s.desc}</Text>
                             </View>
-                        </View>
+                        </Block>
                     );
                 })}
 
                 <Text style={styles.sectionHeading}>Elite Club tiers</Text>
-                {TIERS.map((t) => (
-                    <View key={t.name} style={[styles.tierCard, t.featured && styles.tierFeatured]}>
+                {TIERS.map((tier) => (
+                    <Block key={tier.name} style={[styles.tierBlock, tier.featured && { borderColor: t.ink, borderWidth: 1.5 }]}>
                         <View style={styles.tierLeft}>
-                            <Trophy size={18} color={t.featured ? colors.warning : colors.textSecondary} />
+                            <Trophy size={18} color={tier.featured ? colors.warning : colors.textSecondary} />
                             <View>
-                                <Text style={styles.tierName}>{t.name}</Text>
-                                <Text style={styles.tierPerk}>{t.perk}</Text>
+                                <Text style={styles.tierName}>{tier.name}</Text>
+                                <Text style={styles.tierPerk}>{tier.perk}</Text>
                             </View>
                         </View>
                         <View style={styles.tierCoins}>
                             <Coins size={14} color="#B45309" />
-                            <Text style={styles.tierCoinsText}>{t.coins}</Text>
+                            <Text style={styles.tierCoinsText}>{tier.coins}</Text>
                         </View>
-                    </View>
+                    </Block>
                 ))}
 
-                <TouchableOpacity style={styles.cta} onPress={() => router.push("/(tabs)/profile")} activeOpacity={0.85}>
-                    <Text style={styles.ctaText}>View my rewards</Text>
-                </TouchableOpacity>
+                <PillButton
+                    label="View my rewards"
+                    onPress={() => router.push("/(tabs)/profile")}
+                    style={styles.cta}
+                />
             </ScrollView>
         </SafeAreaView>
     );
@@ -118,30 +118,14 @@ export default function WhatWeOfferScreen() {
 
 const getStyles = (colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: 12, paddingVertical: 8 },
-    backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-    scroll: { paddingHorizontal: 20, paddingBottom: 48 },
-    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8 },
-    title: { fontSize: 30, fontWeight: "800", color: colors.text, letterSpacing: -0.5 },
-    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 10 },
-    sectionHeading: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 28, marginBottom: 2 },
-    card: {
-        flexDirection: "row", alignItems: "flex-start", gap: 14,
-        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-        borderRadius: 14, padding: 16, marginTop: 12,
-    },
-    cardIcon: {
-        width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primaryLight,
-        alignItems: "center", justifyContent: "center",
-    },
+    scroll: { paddingTop: 4, paddingBottom: 48 },
+    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
+    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 4, marginHorizontal: SCREEN_GUTTER },
+    sectionHeading: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 28, marginBottom: 2, marginHorizontal: SCREEN_GUTTER },
+    rowBlock: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
     cardTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
     cardDesc: { fontSize: 13, lineHeight: 20, color: colors.textSecondary, marginTop: 3 },
-    tierCard: {
-        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-        backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-        borderRadius: 14, padding: 16, marginTop: 12,
-    },
-    tierFeatured: { borderColor: colors.warning, borderWidth: 2 },
+    tierBlock: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     tierLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
     tierName: { fontSize: 15, fontWeight: "700", color: colors.text },
     tierPerk: { fontSize: 12, color: colors.textSecondary, marginTop: 2, maxWidth: 200 },
@@ -150,9 +134,5 @@ const getStyles = (colors) => StyleSheet.create({
         backgroundColor: "#FEF3C7", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5,
     },
     tierCoinsText: { fontSize: 13, fontWeight: "800", color: "#92400E" },
-    cta: {
-        backgroundColor: colors.primary, paddingVertical: 15, borderRadius: 14,
-        alignItems: "center", marginTop: 24,
-    },
-    ctaText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+    cta: { marginHorizontal: SCREEN_GUTTER, marginTop: 4 },
 });

@@ -1,18 +1,19 @@
-import { useAuth } from "@/context/AuthContext";
 import { Loader } from "@/components/Loader";
-import { useTheme } from "@/context/ThemeContext";
+import { Block, IconCircle, PillButton, useDesign } from "@/components/ui/Design";
+import { Text } from "@/components/ui/Typography";
+import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { AlertCircle, CheckCircle2, LogIn, RefreshCw, Users } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function JoinGroupScreen() {
     const { inviteCode } = useLocalSearchParams();
     const { token, loading: authLoading } = useAuth();
-    const { colors } = useTheme();
+    const { colors } = useDesign();
     const styles = getStyles(colors);
 
     // loading | joining | success | error | unauthenticated
@@ -25,6 +26,11 @@ export default function JoinGroupScreen() {
         try {
             const res = await api.post(`/groups/join/${inviteCode}`);
             const groupId = res.data?.group?._id;
+            // Approval-required group: a join request was filed instead.
+            if (res.status === 202 || res.data?.pending) {
+                setStatus("requested");
+                return;
+            }
             setStatus("success");
             setTimeout(() => {
                 router.replace(groupId ? `/groups/${groupId}` : "/(tabs)/home");
@@ -51,8 +57,10 @@ export default function JoinGroupScreen() {
                 return;
             }
             setErrorMsg(
-                httpStatus === 404
-                    ? "This invite link is invalid or has expired."
+                httpStatus === 410
+                    ? "This invite link has expired. Ask the group creator to share a new one."
+                    : httpStatus === 404
+                    ? "This invite link is invalid or has been reset."
                     : msg || "Something went wrong. Please try again."
             );
             setStatus("error");
@@ -73,7 +81,7 @@ export default function JoinGroupScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.card}>
+            <Block style={styles.card}>
                 {(status === "loading" || status === "joining") && (
                     <>
                         <Loader size={48} />
@@ -84,53 +92,69 @@ export default function JoinGroupScreen() {
 
                 {status === "success" && (
                     <>
-                        <View style={[styles.iconCircle, { backgroundColor: colors.successLight }]}>
+                        <IconCircle size={64} tint={colors.successLight}>
                             <CheckCircle2 size={32} color={colors.success} />
-                        </View>
+                        </IconCircle>
                         <Text style={styles.title}>You{"'"}re in!</Text>
                         <Text style={styles.subtitle}>Taking you to the group…</Text>
                     </>
                 )}
 
+                {status === "requested" && (
+                    <>
+                        <IconCircle size={64} tint={colors.primaryLight}>
+                            <Users size={32} color={colors.primary} />
+                        </IconCircle>
+                        <Text style={styles.title}>Request sent</Text>
+                        <Text style={styles.subtitle}>
+                            This group needs the creator{"'"}s approval. You{"'"}ll get a notification once you{"'"}re added.
+                        </Text>
+                        <PillButton label="Go home" onPress={() => router.replace("/(tabs)/home")} style={styles.fullBtn} />
+                    </>
+                )}
+
                 {status === "unauthenticated" && (
                     <>
-                        <View style={[styles.iconCircle, { backgroundColor: colors.primaryLight }]}>
+                        <IconCircle size={64} tint={colors.primaryLight}>
                             <Users size={32} color={colors.primary} />
-                        </View>
+                        </IconCircle>
                         <Text style={styles.title}>Sign in to join</Text>
                         <Text style={styles.subtitle}>
                             Log in or create an account to join this group. We{"'"}ll bring you right back.
                         </Text>
-                        <TouchableOpacity style={styles.primaryBtn} onPress={goToLogin} activeOpacity={0.85}>
-                            <LogIn size={16} color="#FFFFFF" />
-                            <Text style={styles.primaryBtnText}>Sign in</Text>
-                        </TouchableOpacity>
+                        <PillButton
+                            label="Sign in"
+                            onPress={goToLogin}
+                            icon={<LogIn size={16} color={colors.onPrimary} />}
+                            style={styles.fullBtn}
+                        />
                     </>
                 )}
 
                 {status === "error" && (
                     <>
-                        <View style={[styles.iconCircle, { backgroundColor: colors.errorLight }]}>
+                        <IconCircle size={64} tint={colors.errorLight}>
                             <AlertCircle size={32} color={colors.error} />
-                        </View>
+                        </IconCircle>
                         <Text style={styles.title}>Couldn{"'"}t join</Text>
                         <Text style={styles.subtitle}>{errorMsg}</Text>
                         <View style={styles.errorActions}>
-                            <TouchableOpacity style={styles.secondaryBtn} onPress={join} activeOpacity={0.85}>
-                                <RefreshCw size={15} color={colors.text} />
-                                <Text style={styles.secondaryBtnText}>Retry</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.primaryBtn}
+                            <PillButton
+                                label="Retry"
+                                variant="secondary"
+                                onPress={join}
+                                icon={<RefreshCw size={15} color={colors.text} />}
+                                style={styles.flexBtn}
+                            />
+                            <PillButton
+                                label="Go home"
                                 onPress={() => router.replace("/(tabs)/home")}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={styles.primaryBtnText}>Go home</Text>
-                            </TouchableOpacity>
+                                style={styles.flexBtn}
+                            />
                         </View>
                     </>
                 )}
-            </View>
+            </Block>
         </SafeAreaView>
     );
 }
@@ -146,47 +170,15 @@ const getStyles = (colors) => StyleSheet.create({
     card: {
         width: "100%",
         maxWidth: 380,
-        backgroundColor: colors.card,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: colors.border,
+        marginHorizontal: 0,
+        marginBottom: 0,
         padding: 28,
         alignItems: "center",
         gap: 12,
     },
-    iconCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        justifyContent: "center",
-        alignItems: "center",
-    },
     title: { fontSize: 20, fontWeight: "800", color: colors.text, textAlign: "center" },
     subtitle: { fontSize: 14, color: colors.textSecondary, textAlign: "center", lineHeight: 20 },
-    primaryBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        backgroundColor: colors.primary,
-        paddingHorizontal: 24,
-        paddingVertical: 13,
-        borderRadius: 14,
-        marginTop: 8,
-    },
-    primaryBtnText: { fontSize: 15, fontWeight: "700", color: "#FFFFFF" },
-    secondaryBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        borderWidth: 1,
-        borderColor: colors.border,
-        paddingHorizontal: 20,
-        paddingVertical: 13,
-        borderRadius: 14,
-        marginTop: 8,
-    },
-    secondaryBtnText: { fontSize: 15, fontWeight: "700", color: colors.text },
-    errorActions: { flexDirection: "row", gap: 10 },
+    fullBtn: { alignSelf: "stretch", marginTop: 8 },
+    errorActions: { flexDirection: "row", gap: 10, alignSelf: "stretch", marginTop: 8 },
+    flexBtn: { flex: 1 },
 });

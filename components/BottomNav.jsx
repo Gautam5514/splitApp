@@ -1,6 +1,7 @@
 import { router, usePathname } from "expo-router";
 import { Home, PlusCircle, Split } from "lucide-react-native";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 export default function BottomNav() {
   const path = usePathname();

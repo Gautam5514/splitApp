@@ -1,34 +1,82 @@
+import { Skeleton, SkeletonCircle } from "@/components/ui/Skeleton";
 import { useTheme } from "@/context/ThemeContext";
+import { Block, IconCircle, ListRow, PillButton, PillInput, SectionLabel } from "@/components/ui/Design";
+import { surfaceStyle, tokens } from "@/constants/design";
 import {
     ArrowDownCircle,
     ArrowUpCircle,
     CheckCircle2,
     Clock,
     Coins,
+    Copy,
+    Check,
+    Download,
+    QrCode,
     SmilePlus,
-    Wallet2,
+    Smartphone,
+    X,
     Zap,
 } from "lucide-react-native";
+import { Alert } from "@/lib/alert";
+import { formatMoney } from "@/lib/groupPresets";
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Image, Linking, Modal, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import * as WebBrowser from "expo-web-browser";
+import { Text } from "@/components/ui/Typography";
 
 export default function GroupBalanceSection({
     balances,
+    loading = false,
     pendingSettlements,
     meId,
+    currency = "INR",
+    groupName = "",
     onRequestSettlement,
     onConfirmSettlement,
     onRejectSettlement,
     onCancelSettlement,
 }) {
-    const { colors } = useTheme();
-    const styles = getStyles(colors);
+    const { colors, theme } = useTheme();
+    const isDark = theme === "dark";
+    const t = tokens(colors, isDark);
+    const styles = getStyles(colors, t);
 
     // Holds the suggestion index whose payment-method picker is open
     const [activeForm, setActiveForm] = useState(null);
     const [method, setMethod] = useState("cash");
     const [note, setNote] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    // The suggestion whose payment sheet (UPI + QR) is open, or null.
+    const [payTarget, setPayTarget] = useState(null);
+    const [copied, setCopied] = useState(false);
+
+    const copyUpi = async (upiId) => {
+        try {
+            await Clipboard.setStringAsync(String(upiId));
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            Alert.alert("Couldn't copy", "Please copy the UPI ID manually.");
+        }
+    };
+
+    // No file-system/media-library dep in the app, so "download" opens the QR
+    // image in the in-app browser where the user can long-press → Save image.
+    const openQr = async (url) => {
+        try {
+            await WebBrowser.openBrowserAsync(url);
+        } catch {
+            Linking.openURL(url).catch(() => Alert.alert("Couldn't open", "Try again or ask for the UPI ID instead."));
+        }
+    };
+
+    const money = (v) => formatMoney(v, currency);
+    // upi:// deep link - opens GPay/PhonePe/Paytm with payee + amount filled in.
+    const payViaUpi = (s) => {
+        const url = `upi://pay?pa=${encodeURIComponent(s.to.upiId)}&pn=${encodeURIComponent(s.to.name || "")}&am=${Number(s.amount).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`SplitEase: ${groupName}`.slice(0, 50))}`;
+        Linking.openURL(url).catch(() => Alert.alert("No UPI app found", "Install a UPI app like GPay or PhonePe, or pay another way."));
+    };
 
     const hasBalances = balances?.balances?.length > 0;
     const hasSuggestions = balances?.suggestions?.length > 0;
@@ -56,82 +104,99 @@ export default function GroupBalanceSection({
     };
 
     return (
-        <View style={styles.container}>
+        <View>
             {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <Wallet2 size={18} color={colors.primary} />
-                    <Text style={styles.headerTitle}>Balances</Text>
-                </View>
+            <SectionLabel
+                right={
+                    hasBalances ? (
+                        <Text style={styles.headerCount}>
+                            {balances.balances.length}{" "}
+                            {balances.balances.length === 1 ? "entry" : "entries"}
+                        </Text>
+                    ) : null
+                }
+            >
+                Balances
+            </SectionLabel>
 
-                {hasBalances && (
-                    <Text style={styles.headerCount}>
-                        {balances.balances.length}{" "}
-                        {balances.balances.length === 1 ? "entry" : "entries"}
-                    </Text>
-                )}
-            </View>
-
-            {/* No Balances */}
-            {!hasBalances ? (
-                <View style={styles.emptyContainer}>
-                    <View style={styles.emptyIcon}>
-                        <Coins size={22} color={colors.primary} />
+            {/* Still fetching: skeleton, not the "No balances" message */}
+            {loading ? (
+                <Block>
+                    <View style={{ gap: 14, paddingVertical: 6 }}>
+                        {[0, 1, 2].map((i) => (
+                            <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                                <SkeletonCircle size={36} />
+                                <Skeleton width="45%" height={13} />
+                                <View style={{ flex: 1 }} />
+                                <Skeleton width={56} height={13} />
+                            </View>
+                        ))}
                     </View>
-                    <Text style={styles.emptyText}>
-                        No balances yet — add some expenses to see who owes whom.
-                    </Text>
-                </View>
+                </Block>
+            ) : !hasBalances ? (
+                <Block>
+                    <View style={styles.emptyContainer}>
+                        <View style={styles.emptyIcon}>
+                            <Coins size={22} color={colors.primary} />
+                        </View>
+                        <Text style={styles.emptyText}>
+                            No balances yet — add some expenses to see who owes whom.
+                        </Text>
+                    </View>
+                </Block>
             ) : (
-                <View style={styles.balancesList}>
+                <Block padded={false} style={styles.balancesBlock}>
                     {balances.balances.map((b, i) => {
                         const bal = Number(b.balance) || 0;
                         const isUp = bal > 0.01;
                         const isDown = bal < -0.01;
                         return (
-                            <View key={b.userId || i} style={styles.balanceItem}>
-                                <View style={styles.balanceLeft}>
-                                    {isUp ? (
-                                        <ArrowUpCircle size={16} color={colors.success} />
-                                    ) : isDown ? (
-                                        <ArrowDownCircle size={16} color={colors.error} />
-                                    ) : (
-                                        <SmilePlus size={16} color={colors.textSecondary} />
-                                    )}
-                                    <Text style={styles.balanceName} numberOfLines={1}>
-                                        {b.name}
-                                    </Text>
-                                </View>
-
-                                <Text
-                                    style={[
-                                        styles.balanceAmount,
-                                        isUp
-                                            ? styles.balancePositive
+                            <ListRow
+                                key={b.userId || i}
+                                leading={
+                                    <IconCircle size={40}>
+                                        {isUp ? (
+                                            <ArrowUpCircle size={18} color={colors.success} />
+                                        ) : isDown ? (
+                                            <ArrowDownCircle size={18} color={colors.error} />
+                                        ) : (
+                                            <SmilePlus size={18} color={colors.textSecondary} />
+                                        )}
+                                    </IconCircle>
+                                }
+                                title={b.name}
+                                trailing={
+                                    <Text
+                                        style={[
+                                            styles.balanceAmount,
+                                            isUp
+                                                ? styles.balancePositive
+                                                : isDown
+                                                    ? styles.balanceNegative
+                                                    : styles.balanceNeutral,
+                                        ]}
+                                    >
+                                        {isUp
+                                            ? `+${money(Math.abs(bal))}`
                                             : isDown
-                                                ? styles.balanceNegative
-                                                : styles.balanceNeutral,
-                                    ]}
-                                >
-                                    {isUp
-                                        ? `+₹${Math.abs(bal).toFixed(0)}`
-                                        : isDown
-                                            ? `-₹${Math.abs(bal).toFixed(0)}`
-                                            : "Settled"}
-                                </Text>
-                            </View>
+                                                ? `-${money(Math.abs(bal))}`
+                                                : "Settled"}
+                                    </Text>
+                                }
+                            />
                         );
                     })}
-                </View>
+                </Block>
             )}
 
             {/* Smart Settlements */}
             {hasSuggestions && (
-                <View style={styles.suggestionsContainer}>
-                    <View style={styles.suggestionsTitleRow}>
-                        <Zap size={14} color={colors.warning} />
-                        <Text style={styles.suggestionsTitle}>Smart Settlements</Text>
-                    </View>
+                <>
+                    <SectionLabel
+                        right={<Zap size={16} color={colors.warning} />}
+                    >
+                        Smart Settlements
+                    </SectionLabel>
 
                     <View style={styles.suggestionsList}>
                         {balances.suggestions.map((s, i) => {
@@ -144,13 +209,13 @@ export default function GroupBalanceSection({
                             const amt = Number(s.amount).toFixed(0);
 
                             return (
-                                <View key={i} style={styles.suggestionItem}>
+                                <Block key={i} style={styles.suggestionItem}>
                                     <Text style={styles.suggestionText}>
                                         <Text style={styles.suggestionFrom}>
                                             {isDebtor ? "You" : s.from.name}
                                         </Text>
                                         <Text style={styles.suggestionNormal}> owe </Text>
-                                        <Text style={styles.suggestionAmount}>₹{amt}</Text>
+                                        <Text style={styles.suggestionAmount}>{money(amt)}</Text>
                                         <Text style={styles.suggestionNormal}> to </Text>
                                         <Text style={styles.suggestionTo}>
                                             {isCreditor ? "You" : s.to.name}
@@ -161,6 +226,7 @@ export default function GroupBalanceSection({
                                         <PendingSettlementRow
                                             pending={pending}
                                             meId={meId}
+                                            money={money}
                                             colors={colors}
                                             styles={styles}
                                             onConfirm={onConfirmSettlement}
@@ -169,6 +235,11 @@ export default function GroupBalanceSection({
                                         />
                                     ) : isFormOpen ? (
                                         <View style={styles.confirmBox}>
+                                            {isCreditor && (
+                                                <Text style={[styles.confirmQuestion, { fontWeight: "700" }]}>
+                                                    Are you sure you received {money(amt)}? This will mark it as settled.
+                                                </Text>
+                                            )}
                                             <Text style={styles.confirmQuestion}>
                                                 How did you {isDebtor ? "pay" : "receive"}?
                                             </Text>
@@ -197,8 +268,7 @@ export default function GroupBalanceSection({
                                                     </TouchableOpacity>
                                                 ))}
                                             </View>
-                                            <TextInput
-                                                style={styles.noteInput}
+                                            <PillInput
                                                 value={note}
                                                 onChangeText={setNote}
                                                 maxLength={200}
@@ -206,51 +276,56 @@ export default function GroupBalanceSection({
                                                 placeholderTextColor={colors.textSecondary}
                                             />
                                             <View style={styles.confirmActions}>
-                                                <TouchableOpacity
-                                                    activeOpacity={0.85}
+                                                <PillButton
+                                                    variant="primary"
                                                     disabled={submitting}
-                                                    style={[
-                                                        styles.confirmChoice,
-                                                        styles.confirmYes,
-                                                        submitting && styles.btnDisabled,
-                                                    ]}
                                                     onPress={() => submitRequest(s)}
-                                                >
-                                                    <Text style={styles.confirmYesText}>
-                                                        {submitting ? "Sending…" : "Send Request"}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                                <TouchableOpacity
-                                                    activeOpacity={0.85}
-                                                    style={[styles.confirmChoice, styles.confirmNo]}
+                                                    label={submitting ? (isCreditor ? "Settling…" : "Sending…") : isCreditor ? "Yes, I Received It" : "Send Request"}
+                                                    style={styles.confirmChoice}
+                                                    textStyle={styles.confirmChoiceText}
+                                                />
+                                                <PillButton
+                                                    variant="secondary"
                                                     onPress={closeForm}
-                                                >
-                                                    <Text style={styles.confirmNoText}>Cancel</Text>
-                                                </TouchableOpacity>
+                                                    label="Cancel"
+                                                    style={styles.confirmChoice}
+                                                    textStyle={styles.confirmChoiceText}
+                                                />
                                             </View>
                                         </View>
                                     ) : canSettle && isDebtor ? (
-                                        <TouchableOpacity
-                                            activeOpacity={0.85}
-                                            style={[styles.actionBtn, styles.payBtn]}
-                                            onPress={() => openForm(i)}
-                                        >
-                                            <CheckCircle2 size={14} color={colors.success} />
-                                            <Text style={styles.payBtnText}>
-                                                I&apos;ve Paid ₹{amt}
-                                            </Text>
-                                        </TouchableOpacity>
+                                        <View style={{ gap: 8 }}>
+                                            {(s.to.upiId || s.to.upiQrUrl) && currency === "INR" ? (
+                                                <PillButton
+                                                    variant="primary"
+                                                    onPress={() => { setCopied(false); setPayTarget(s); }}
+                                                    icon={<Smartphone size={16} color={t.onInk} />}
+                                                    label={`Pay ${money(amt)} to ${s.to.name}`}
+                                                    style={styles.actionBtn}
+                                                    textStyle={styles.actionBtnText}
+                                                />
+                                            ) : null}
+                                            <PillButton
+                                                variant="secondary"
+                                                onPress={() => openForm(i)}
+                                                icon={<CheckCircle2 size={16} color={colors.success} />}
+                                                label={`I've Paid ${money(amt)}`}
+                                                style={styles.actionBtn}
+                                                textStyle={[styles.actionBtnText, { color: colors.success }]}
+                                            />
+                                            {(s.to.upiId || s.to.upiQrUrl) && currency === "INR" ? (
+                                                <Text style={styles.thirdPartyNote}>After paying, tap &quot;I&apos;ve Paid&quot; so {s.to.name} can confirm.</Text>
+                                            ) : null}
+                                        </View>
                                     ) : canSettle && isCreditor ? (
-                                        <TouchableOpacity
-                                            activeOpacity={0.85}
-                                            style={[styles.actionBtn, styles.confirmBtn]}
+                                        <PillButton
+                                            variant="secondary"
                                             onPress={() => openForm(i)}
-                                        >
-                                            <CheckCircle2 size={14} color={colors.warning} />
-                                            <Text style={styles.confirmBtnText}>
-                                                Mark ₹{amt} as Received
-                                            </Text>
-                                        </TouchableOpacity>
+                                            icon={<CheckCircle2 size={16} color={colors.warning} />}
+                                            label={`Mark ${money(amt)} as Received`}
+                                            style={styles.actionBtn}
+                                            textStyle={[styles.actionBtnText, { color: colors.warning }]}
+                                        />
                                     ) : canSettle ? (
                                         <Text style={styles.thirdPartyNote}>
                                             Only the people involved can record this settlement
@@ -260,19 +335,115 @@ export default function GroupBalanceSection({
                                             Suggestion #{i + 1}
                                         </Text>
                                     )}
-                                </View>
+                                </Block>
                             );
                         })}
                     </View>
-                </View>
+                </>
             )}
+
+            {/* Payment sheet: payee UPI ID (copy) + QR (open/save) + UPI app link */}
+            <Modal
+                visible={!!payTarget}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setPayTarget(null)}
+            >
+                <Pressable style={styles.sheetBackdrop} onPress={() => setPayTarget(null)}>
+                    <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+                        {payTarget && (
+                            <>
+                                <View style={styles.sheetHandle} />
+                                <View style={styles.sheetHeader}>
+                                    <View>
+                                        <Text style={styles.sheetKicker}>PAY</Text>
+                                        <Text style={styles.sheetTitle}>Send {money(Number(payTarget.amount).toFixed(0))}</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={() => setPayTarget(null)} style={styles.sheetClose} hitSlop={10}>
+                                        <X size={18} color={colors.text} />
+                                    </TouchableOpacity>
+                                </View>
+
+                                <Text style={styles.sheetPayee}>to {payTarget.to.name}</Text>
+
+                                {/* QR */}
+                                {payTarget.to.upiQrUrl ? (
+                                    <View style={styles.sheetQrWrap}>
+                                        <View style={styles.sheetQrLabelRow}>
+                                            <QrCode size={13} color={colors.primary} />
+                                            <Text style={styles.sheetSectionLabel}>Scan to pay</Text>
+                                        </View>
+                                        <View style={styles.sheetQrBox}>
+                                            <Image source={{ uri: payTarget.to.upiQrUrl }} style={styles.sheetQrImg} resizeMode="contain" />
+                                        </View>
+                                        <TouchableOpacity style={styles.sheetGhostBtn} onPress={() => openQr(payTarget.to.upiQrUrl)} activeOpacity={0.85}>
+                                            <Download size={15} color={colors.text} />
+                                            <Text style={styles.sheetGhostText}>Open / save QR</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : null}
+
+                                {/* UPI ID + copy */}
+                                {payTarget.to.upiId ? (
+                                    <View style={styles.sheetUpiWrap}>
+                                        <View style={styles.sheetQrLabelRow}>
+                                            <Coins size={13} color={colors.primary} />
+                                            <Text style={styles.sheetSectionLabel}>UPI ID</Text>
+                                        </View>
+                                        <View style={styles.sheetUpiRow}>
+                                            <Text style={styles.sheetUpiText} numberOfLines={1}>{payTarget.to.upiId}</Text>
+                                            <TouchableOpacity
+                                                style={[styles.sheetCopyBtn, copied && styles.sheetCopyBtnDone]}
+                                                onPress={() => copyUpi(payTarget.to.upiId)}
+                                                activeOpacity={0.85}
+                                            >
+                                                {copied ? <Check size={14} color={colors.success} /> : <Copy size={14} color={t.onInk} />}
+                                                <Text style={[styles.sheetCopyText, copied && { color: colors.success }]}>{copied ? "Copied" : "Copy"}</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ) : null}
+
+                                {/* One-tap UPI app */}
+                                {payTarget.to.upiId ? (
+                                    <PillButton
+                                        variant="primary"
+                                        onPress={() => payViaUpi(payTarget)}
+                                        icon={<Smartphone size={16} color={t.onInk} />}
+                                        label="Open UPI app"
+                                        style={styles.sheetPrimaryBtn}
+                                        textStyle={styles.actionBtnText}
+                                    />
+                                ) : null}
+
+                                {/* Confirm → existing settlement request flow */}
+                                <PillButton
+                                    variant="secondary"
+                                    onPress={() => {
+                                        const idx = balances.suggestions.findIndex(
+                                            (x) => String(x.to.userId) === String(payTarget.to.userId) && String(x.from.userId) === String(payTarget.from.userId)
+                                        );
+                                        setPayTarget(null);
+                                        if (idx >= 0) openForm(idx);
+                                    }}
+                                    icon={<CheckCircle2 size={16} color={colors.success} />}
+                                    label={`I've Paid ${money(Number(payTarget.amount).toFixed(0))}`}
+                                    style={styles.sheetPrimaryBtn}
+                                    textStyle={[styles.actionBtnText, { color: colors.success }]}
+                                />
+                                <Text style={styles.sheetFootNote}>{payTarget.to.name} will get a request to confirm before it&apos;s settled.</Text>
+                            </>
+                        )}
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </View>
     );
 }
 
 // A pending settlement claim on a suggestion row: either "waiting on the
 // other party" (if I initiated it) or "confirm/reject" (if I need to act).
-function PendingSettlementRow({ pending, meId, colors, styles, onConfirm, onReject, onCancel }) {
+function PendingSettlementRow({ pending, meId, money, colors, styles, onConfirm, onReject, onCancel }) {
     const isInitiator = String(pending.initiatedBy._id) === String(meId);
     const initiatorPaid = String(pending.initiatedBy._id) === String(pending.fromUserId._id);
     const counterpartyName = initiatorPaid ? pending.toUserId.name : pending.fromUserId.name;
@@ -287,13 +458,13 @@ function PendingSettlementRow({ pending, meId, colors, styles, onConfirm, onReje
                         Waiting for {counterpartyName} to confirm
                     </Text>
                 </View>
-                <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[styles.confirmChoice, styles.confirmNo]}
+                <PillButton
+                    variant="secondary"
                     onPress={() => onCancel(pending._id)}
-                >
-                    <Text style={styles.confirmNoText}>Cancel Request</Text>
-                </TouchableOpacity>
+                    label="Cancel Request"
+                    style={styles.confirmChoice}
+                    textStyle={styles.confirmChoiceText}
+                />
             </View>
         );
     }
@@ -303,71 +474,46 @@ function PendingSettlementRow({ pending, meId, colors, styles, onConfirm, onReje
             <Text style={styles.pendingAskText}>
                 <Text style={styles.pendingAskBold}>{pending.initiatedBy.name}</Text> says{" "}
                 {initiatorPaid ? "they paid you" : "they received"}{" "}
-                <Text style={styles.pendingAskBold}>₹{Number(pending.amount).toFixed(0)}</Text>{" "}
+                <Text style={styles.pendingAskBold}>{money(pending.amount)}</Text>{" "}
                 {methodLabel}. Confirm?
             </Text>
             {!!pending.note && (
                 <Text style={styles.pendingNote}>&ldquo;{pending.note}&rdquo;</Text>
             )}
             <View style={styles.confirmActions}>
-                <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[styles.confirmChoice, styles.confirmYes]}
+                <PillButton
+                    variant="primary"
                     onPress={() => onConfirm(pending._id)}
-                >
-                    <Text style={styles.confirmYesText}>Yes, Confirm</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[styles.confirmChoice, styles.confirmNo]}
+                    label="Yes, Confirm"
+                    style={styles.confirmChoice}
+                    textStyle={styles.confirmChoiceText}
+                />
+                <PillButton
+                    variant="secondary"
                     onPress={() => onReject(pending._id)}
-                >
-                    <Text style={styles.confirmNoText}>Not Yet</Text>
-                </TouchableOpacity>
+                    label="Not Yet"
+                    style={styles.confirmChoice}
+                    textStyle={styles.confirmChoiceText}
+                />
             </View>
         </View>
     );
 }
 
-const getStyles = (colors) => StyleSheet.create({
-    container: {
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 12,
-        padding: 20,
-    },
-    header: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 20,
-    },
-    headerLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    headerTitle: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: colors.primary,
-    },
+const getStyles = (colors, t) => StyleSheet.create({
     headerCount: {
         fontSize: 12,
         color: colors.textSecondary,
     },
     emptyContainer: {
         alignItems: "center",
-        paddingVertical: 40,
+        paddingVertical: 24,
     },
     emptyIcon: {
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
+        backgroundColor: t.surfaceAlt,
         justifyContent: "center",
         alignItems: "center",
         marginBottom: 12,
@@ -377,35 +523,12 @@ const getStyles = (colors) => StyleSheet.create({
         color: colors.textSecondary,
         textAlign: "center",
     },
-    balancesList: {
-        gap: 12,
-    },
-    balanceItem: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        backgroundColor: colors.inputBackground,
-        padding: 16,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    balanceLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        flex: 1,
-        marginRight: 8,
-    },
-    balanceName: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: colors.text,
-        flexShrink: 1,
+    balancesBlock: {
+        paddingVertical: 6,
     },
     balanceAmount: {
-        fontSize: 14,
-        fontWeight: "600",
+        fontSize: 15,
+        fontWeight: "700",
     },
     balancePositive: {
         color: colors.success,
@@ -416,34 +539,15 @@ const getStyles = (colors) => StyleSheet.create({
     balanceNeutral: {
         color: colors.textSecondary,
     },
-    suggestionsContainer: {
-        marginTop: 28,
-    },
-    suggestionsTitleRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        marginBottom: 12,
-    },
-    suggestionsTitle: {
-        fontSize: 14,
-        fontWeight: "700",
-        color: colors.text,
-    },
     suggestionsList: {
-        gap: 12,
+        gap: 0,
     },
     suggestionItem: {
-        backgroundColor: colors.inputBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 16,
-        borderRadius: 12,
-        gap: 10,
+        gap: 12,
     },
     suggestionText: {
-        fontSize: 13,
-        lineHeight: 20,
+        fontSize: 14,
+        lineHeight: 21,
     },
     suggestionFrom: {
         fontWeight: "700",
@@ -466,117 +570,67 @@ const getStyles = (colors) => StyleSheet.create({
         textTransform: "uppercase",
     },
     actionBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        paddingVertical: 10,
-        borderRadius: 10,
-        borderWidth: 1,
+        alignSelf: "flex-start",
     },
-    payBtn: {
-        backgroundColor: colors.successLight,
-        borderColor: colors.success,
-    },
-    payBtnText: {
-        fontSize: 13,
+    actionBtnText: {
+        fontSize: 14,
         fontWeight: "700",
-        color: colors.success,
-    },
-    confirmBtn: {
-        backgroundColor: "rgba(245,158,11,0.12)",
-        borderColor: colors.warning,
-    },
-    confirmBtnText: {
-        fontSize: 13,
-        fontWeight: "700",
-        color: colors.warning,
     },
     confirmBox: {
-        borderWidth: 1,
-        borderColor: colors.warning,
-        backgroundColor: "rgba(245,158,11,0.10)",
-        borderRadius: 10,
-        padding: 12,
-        gap: 10,
+        ...surfaceStyle(t),
+        backgroundColor: t.surfaceAlt,
+        borderRadius: 18,
+        padding: 14,
+        gap: 12,
     },
     confirmQuestion: {
-        fontSize: 12,
+        fontSize: 13,
         color: colors.text,
         fontWeight: "500",
         lineHeight: 18,
     },
     confirmActions: {
         flexDirection: "row",
-        gap: 8,
+        gap: 10,
     },
     confirmChoice: {
         flex: 1,
-        paddingVertical: 9,
-        borderRadius: 8,
-        alignItems: "center",
+        height: 46,
     },
-    confirmYes: {
-        backgroundColor: colors.success,
-    },
-    confirmYesText: {
-        fontSize: 12,
-        fontWeight: "700",
-        color: "#FFFFFF",
-    },
-    confirmNo: {
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    confirmNoText: {
-        fontSize: 12,
-        fontWeight: "600",
-        color: colors.textSecondary,
-    },
-    btnDisabled: {
-        opacity: 0.6,
+    confirmChoiceText: {
+        fontSize: 14,
     },
     methodRow: {
         flexDirection: "row",
-        gap: 8,
+        gap: 10,
     },
     methodBtn: {
         flex: 1,
-        paddingVertical: 9,
-        borderRadius: 8,
+        paddingVertical: 11,
+        borderRadius: 999,
         alignItems: "center",
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: t.outline,
+        backgroundColor: t.surface,
     },
     methodBtnActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
+        backgroundColor: t.ink,
+        borderColor: t.ink,
     },
     methodBtnText: {
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: "600",
         color: colors.textSecondary,
     },
     methodBtnTextActive: {
-        color: "#FFFFFF",
-    },
-    noteInput: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        fontSize: 12,
-        color: colors.text,
-        backgroundColor: colors.card,
+        color: t.onInk,
     },
     pendingBox: {
-        borderWidth: 1,
-        borderColor: colors.warning,
-        backgroundColor: "rgba(245,158,11,0.10)",
-        borderRadius: 10,
-        padding: 12,
-        gap: 10,
+        ...surfaceStyle(t),
+        backgroundColor: t.surfaceAlt,
+        borderRadius: 18,
+        padding: 14,
+        gap: 12,
     },
     pendingWaitRow: {
         flexDirection: "row",
@@ -584,28 +638,76 @@ const getStyles = (colors) => StyleSheet.create({
         gap: 6,
     },
     pendingWaitText: {
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: "500",
         color: colors.warning,
         flexShrink: 1,
     },
     pendingAskText: {
-        fontSize: 12,
+        fontSize: 13,
         color: colors.text,
-        lineHeight: 18,
+        lineHeight: 19,
     },
     pendingAskBold: {
         fontWeight: "700",
     },
     pendingNote: {
-        fontSize: 11,
+        fontSize: 12,
         fontStyle: "italic",
         color: colors.textSecondary,
     },
     thirdPartyNote: {
-        fontSize: 11,
+        fontSize: 12,
         color: colors.textSecondary,
         textAlign: "center",
         paddingVertical: 2,
     },
+
+    // Payment bottom sheet
+    sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+    sheet: {
+        backgroundColor: colors.card,
+        borderTopLeftRadius: 26, borderTopRightRadius: 26,
+        paddingHorizontal: 20, paddingTop: 10, paddingBottom: 30, gap: 14,
+    },
+    sheetHandle: {
+        alignSelf: "center", width: 40, height: 4, borderRadius: 2,
+        backgroundColor: colors.border, marginBottom: 6,
+    },
+    sheetHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+    sheetKicker: { fontSize: 10, fontWeight: "800", letterSpacing: 2, color: colors.primary },
+    sheetTitle: { fontSize: 20, fontWeight: "800", color: colors.text, marginTop: 2, letterSpacing: -0.3 },
+    sheetClose: {
+        width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center",
+        backgroundColor: t.surfaceAlt,
+    },
+    sheetPayee: { fontSize: 13.5, color: colors.textSecondary, marginTop: -6 },
+    sheetSectionLabel: { fontSize: 12, fontWeight: "700", color: colors.text },
+    sheetQrLabelRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+    sheetQrWrap: { gap: 2 },
+    sheetQrBox: {
+        alignSelf: "center", backgroundColor: "#fff", borderRadius: 16, padding: 12,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+    },
+    sheetQrImg: { width: 200, height: 200, borderRadius: 8 },
+    sheetGhostBtn: {
+        flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+        marginTop: 10, paddingVertical: 11, borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+    },
+    sheetGhostText: { fontSize: 13, fontWeight: "700", color: colors.text },
+    sheetUpiWrap: { gap: 2 },
+    sheetUpiRow: {
+        flexDirection: "row", alignItems: "center", gap: 10,
+        backgroundColor: t.surfaceAlt, borderRadius: 14, paddingLeft: 14, paddingRight: 6, paddingVertical: 6,
+    },
+    sheetUpiText: { flex: 1, fontSize: 14.5, fontWeight: "700", color: colors.text },
+    sheetCopyBtn: {
+        flexDirection: "row", alignItems: "center", gap: 6,
+        backgroundColor: t.ink, borderRadius: 11, paddingHorizontal: 14, paddingVertical: 9,
+    },
+    sheetCopyBtnDone: { backgroundColor: "rgba(22,163,74,0.14)" },
+    sheetCopyText: { fontSize: 13, fontWeight: "800", color: t.onInk },
+    sheetPrimaryBtn: { width: "100%" },
+    sheetFootNote: { fontSize: 11, color: colors.textSecondary, textAlign: "center" },
 });

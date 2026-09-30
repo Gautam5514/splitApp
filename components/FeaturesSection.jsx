@@ -7,7 +7,8 @@ import {
   WifiOff,
   Zap,
 } from "lucide-react-native";
-import { Dimensions, StyleSheet, Text, View } from "react-native";
+import { Dimensions, StyleSheet, View } from "react-native";
+import { Text } from "@/components/ui/Typography";
 
 const { width } = Dimensions.get("window");
 
