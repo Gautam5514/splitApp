@@ -15,7 +15,9 @@
 [![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB?style=flat-square&logo=react&logoColor=black)](https://reactnative.dev)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Push-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com)
-[![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)](#-license)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
+[![Good first issues](https://img.shields.io/github/issues/Gautam5514/splitApp/good%20first%20issue?style=flat-square&label=good%20first%20issues)](https://github.com/Gautam5514/splitApp/labels/good%20first%20issue)
 
 </div>
 
@@ -45,6 +47,7 @@
 - [Available scripts](#available-scripts)
 - [Building & releasing](#building--releasing)
 - [Roadmap](#roadmap)
+- [Contributing](#contributing)
 - [Support](#support)
 - [License](#license)
 
@@ -153,23 +156,15 @@ npm install
 
 ### Environment variables
 
-Create a `.env` file in the project root with your own Firebase and Google OAuth credentials:
+Copy the templates and fill in **your own** Firebase and Google OAuth credentials:
 
-```env
-EXPO_PUBLIC_API_URL=
-EXPO_PUBLIC_FIREBASE_API_KEY=
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=
-EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=
-EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-EXPO_PUBLIC_FIREBASE_APP_ID=
-EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
-EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=
-EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID=
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=
+```bash
+cp .env.example .env
+cp google-services.json.example google-services.json          # Android
+cp GoogleService-Info.plist.example GoogleService-Info.plist   # iOS
 ```
 
-You'll also need `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) from your own Firebase project.
+These files are git-ignored — never commit them. See [`.env.example`](.env.example) for every variable. The app also needs a compatible backend API (`EXPO_PUBLIC_API_URL`); UI-only contributions don't require one.
 
 ### Run it
 
@@ -214,6 +209,10 @@ The Android app is live today on **[Google Play](https://play.google.com/store/a
 - [ ] Recurring/subscription expense splitting
 - [ ] Export settlements as PDF statements
 
+## Contributing
+
+SplitEase is open source and contributions are welcome! Start with [CONTRIBUTING.md](CONTRIBUTING.md), then grab a [`good first issue`](https://github.com/Gautam5514/splitApp/labels/good%20first%20issue). Please follow our [Code of Conduct](CODE_OF_CONDUCT.md); report security issues via [SECURITY.md](SECURITY.md).
+
 ## Support
 
 - 🐛 Found a bug or have a feature request? [Open an issue](https://github.com/Gautam5514/splitApp/issues).
@@ -221,7 +220,7 @@ The Android app is live today on **[Google Play](https://play.google.com/store/a
 
 ## License
 
-This project is proprietary software. All rights reserved — the source is shared for reference and collaboration; redistribution or commercial reuse requires prior written permission from the maintainer.
+Released under the [MIT License](LICENSE). The SplitEase name and logo remain the property of the maintainer.
 
 ---
 

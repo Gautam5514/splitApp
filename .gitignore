@@ -32,7 +32,16 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+.env.*
+!.env.example
+
+# secrets / service credentials (do NOT commit — open source)
+google-services.json
+GoogleService-Info.plist
+*.keystore
+service-account*.json
 
 # typescript
 *.tsbuildinfo
@@ -42,3 +51,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# secrets — copy from the *.example files and fill in your own values
+.env
+google-services.json
+GoogleService-Info.plist
