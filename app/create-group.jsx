@@ -4,18 +4,22 @@ import { SCREEN_GUTTER } from "@/constants/layout";
 import GroupIconPicker from "@/components/GroupIconPicker";
 import InviteModal from "@/components/InviteModal";
 import PeoplePicker from "@/components/people/PeoplePicker";
+import BottomSheet from "@/components/ui/BottomSheet";
+import SelectField from "@/components/ui/SelectField";
 import GroupTypeIcon from "@/components/group/GroupTypeIcon";
 import { PillButton, PillInput, ScreenHeader, useDesign } from "@/components/ui/Design";
 import { api } from "@/lib/api";
 import { getGroupIcon } from "@/lib/groupIcons";
 import { CURRENCIES, GROUP_TYPES, PRIMARY_GROUP_TYPES, groupTypeMeta, suggestGroupName } from "@/lib/groupPresets";
-import { addPeopleToGroup, describeAddResult } from "@/lib/people";
+import { addPeopleToGroup, describeAddResult, sharesToWeights, normalizePercents } from "@/lib/people";
+import ShareSplitEditor from "@/components/people/ShareSplitEditor";
+import PercentSplitEditor, { effectivePercents, percentTotal } from "@/components/people/PercentSplitEditor";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { CalendarDays, Camera, ChevronRight, Receipt, Sparkles, Wallet } from "lucide-react-native";
+import { CalendarDays, Camera, ChevronRight, Receipt, Sparkles, UserCheck, Wallet } from "lucide-react-native";
 import { useState } from "react";
 import {
     Image,
@@ -63,8 +67,9 @@ export default function CreateGroupScreen() {
     const [type, setType] = useState(null);
     const [name, setName] = useState("");
     const [error, setError] = useState("");
+    const [settingsError, setSettingsError] = useState("");
     const [icon, setIcon] = useState(null);
-    const [showAllIcons, setShowAllIcons] = useState(false);
+    const [iconSheet, setIconSheet] = useState(false);
     const [photo, setPhoto] = useState(null); // { uri, base64 }
     const [startDate, setStartDate] = useState(null);
     const [endDate, setEndDate] = useState(null);
@@ -72,7 +77,10 @@ export default function CreateGroupScreen() {
     const [budget, setBudget] = useState("");
     const [currency, setCurrency] = useState("INR");
     const [receiptRequired, setReceiptRequired] = useState(false);
-    const [splitMode, setSplitMode] = useState("equal"); // "equal" | "shares"
+    const [splitMode, setSplitMode] = useState("equal"); // "equal" | "shares" | "percent"
+    const [percents, setPercents] = useState(null); // null = even split until edited
+    const [joinApproval, setJoinApproval] = useState(false);
+    const [shares, setShares] = useState({}); // { "me" | "u:<id>": number }
     const [selected, setSelected] = useState([]);
     const [creating, setCreating] = useState(false);
     const [createdId, setCreatedId] = useState(null);
@@ -89,17 +97,21 @@ export default function CreateGroupScreen() {
         setStep(1);
     };
 
-    const validateDetails = () => {
+    const validateName = () => {
         if (!trimmed) return "Please name your group.";
         if (trimmed.length < 2) return "Use at least 2 characters.";
         if (trimmed.length > MAX) return `Keep it under ${MAX} characters.`;
+        return "";
+    };
+    const validateSettings = () => {
         if (startDate && endDate && endDate < startDate) return "End date can't be before the start date.";
         if (budget && !(Number(budget) > 0)) return "Budget must be a positive amount.";
+        if (splitMode === "percent" && Math.abs(percentTotal(selected, percents) - 100) > 0.01) return "Percentages must add up to 100.";
         return "";
     };
 
-    const goToPeople = () => {
-        const v = validateDetails();
+    const goToSettings = () => {
+        const v = validateName();
         if (v) { setError(v); return; }
         setError("");
         setStep(2);
@@ -129,14 +141,15 @@ export default function CreateGroupScreen() {
 
     const createGroup = async () => {
         if (creating) return;
-        const v = validateDetails();
-        if (v) { setError(v); setStep(1); return; }
+        const nameProblem = validateName();
+        if (nameProblem) { setError(nameProblem); setStep(1); return; }
+        const settingsProblem = validateSettings();
+        if (settingsProblem) { setSettingsError(settingsProblem); setStep(2); return; }
         try {
             setCreating(true);
             const body = { name: trimmed, groupType: type, icon: photo ? null : icon };
             if (type === "trip") body.trip = { startDate: toYmd(startDate), endDate: toYmd(endDate), budget: budget || null };
-            if (type === "trip" || type === "business") body.settings = { currency };
-            if (type === "business") body.settings = { ...body.settings, receiptRequired };
+            body.settings = { currency, receiptRequired, joinApproval };
             // How expenses are split is decided here, once - not on every expense.
             if (splitMode === "shares") body.settings = { ...body.settings, defaultSplit: { type: "shares", weights: [] } };
 
@@ -161,6 +174,21 @@ export default function CreateGroupScreen() {
                     )
                     : null,
             ]);
+            // Per-person shares/percent: only possible once people are members, so patch after adding.
+            const customShares = splitMode === "shares" && Object.values(shares).some((v) => v !== 1);
+            if (customShares || splitMode === "percent") {
+                try {
+                    const r = await api.get(`/groups/${groupId}`);
+                    const g = r.data?.group || r.data;
+                    const creatorId = g?.createdBy?._id ?? g?.createdBy;
+                    const defaultSplit = splitMode === "percent"
+                        ? { type: "percent", weights: normalizePercents(sharesToWeights(g, Object.fromEntries(Object.entries(effectivePercents(selected, percents)).map(([k, v]) => [k, Number(v) || 0])), creatorId, 0)) }
+                        : { type: "shares", weights: sharesToWeights(g, shares, creatorId) };
+                    await api.patch(`/groups/${groupId}/settings`, { settings: { defaultSplit } });
+                } catch {
+                    notes.push("The split wasn't saved - set it in Group settings.");
+                }
+            }
             if (memberNote) notes.push(memberNote);
             if (photoNote) notes.push(photoNote);
             if (notes.length) {
@@ -199,7 +227,7 @@ export default function CreateGroupScreen() {
     };
 
     const onBack = () => (step > 0 ? setStep(step - 1) : router.back());
-    const title = step === 0 ? "New Group" : step === 1 ? `${meta.label} details` : "Add people";
+    const title = step === 0 ? "New Group" : step === 1 ? "Name & people" : "Settings";
 
     const chip = (label, on, onPress, key) => (
         <TouchableOpacity key={key || label} onPress={() => { tap(); onPress(); }} activeOpacity={0.8}
@@ -246,7 +274,7 @@ export default function CreateGroupScreen() {
                         </View>
                     )}
 
-                    {/* ── Step 2: details ── */}
+                    {/* ── Step 2: name, icon and people ── */}
                     {step === 1 && (
                         <View style={styles.gutter}>
                             <View style={styles.identity}>
@@ -275,32 +303,35 @@ export default function CreateGroupScreen() {
                             {photo ? (
                                 <TouchableOpacity onPress={() => setPhoto(null)}><Text style={styles.linkText}>Remove photo, use an icon</Text></TouchableOpacity>
                             ) : (
-                                <>
-                                    <View style={styles.chipsRow}>
-                                        {QUICK_ICONS[type].map((k) => {
-                                            const I = getGroupIcon(k);
-                                            if (!I) return null;
-                                            const on = icon === k;
-                                            return (
-                                                <TouchableOpacity key={k} onPress={() => { tap(); setIcon(k); }}
-                                                    style={[styles.iconBtn, on && { backgroundColor: t.ink, borderColor: t.ink }]} accessibilityLabel={k}>
-                                                    <I size={18} color={on ? t.onInk : colors.textSecondary} />
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                        {chip(showAllIcons ? "Less" : "More", false, () => setShowAllIcons((v) => !v), "more")}
-                                    </View>
-                                    {showAllIcons && (
-                                        <View style={{ marginTop: 12 }}>
-                                            <GroupIconPicker value={icon} onChange={setIcon} colors={colors} tint={colors.primary} />
-                                        </View>
-                                    )}
-                                </>
+                                <View style={styles.chipsRow}>
+                                    {QUICK_ICONS[type].map((k) => {
+                                        const I = getGroupIcon(k);
+                                        if (!I) return null;
+                                        const on = icon === k;
+                                        return (
+                                            <TouchableOpacity key={k} onPress={() => { tap(); setIcon(k); }}
+                                                style={[styles.iconBtn, on && { backgroundColor: t.ink, borderColor: t.ink }]} accessibilityLabel={k}>
+                                                <I size={18} color={on ? t.onInk : colors.textSecondary} />
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                    {chip("More", false, () => setIconSheet(true), "more")}
+                                </View>
                             )}
+
+                            <Text style={styles.sectionTitle}>Add people</Text>
+                            <PeoplePicker selected={selected} onChange={setSelected} autoFocus={false} />
+                        </View>
+                    )}
+
+                    {/* ── Step 3: settings (all optional) ── */}
+                    {step === 2 && (
+                        <View style={styles.gutter}>
+                            <Text style={styles.lead}>All optional. You can also set these later in Group settings.</Text>
 
                             {type === "trip" && (
                                 <View style={styles.panel}>
-                                    <View style={styles.panelTitleRow}><CalendarDays size={14} color={colors.primary} /><Text style={styles.panelTitle}>Dates (optional)</Text></View>
+                                    <View style={styles.panelTitleRow}><CalendarDays size={14} color={colors.primary} /><Text style={styles.panelTitle}>Dates</Text></View>
                                     <View style={styles.twoCol}>
                                         <TouchableOpacity style={styles.dateBtn} onPress={() => setDatePicker("start")}>
                                             <Text style={[styles.dateText, !startDate && { color: colors.textSecondary }]}>{fmtDay(startDate) || "Start"}</Text>
@@ -322,62 +353,43 @@ export default function CreateGroupScreen() {
                                     {Platform.OS === "ios" && datePicker && (
                                         <TouchableOpacity onPress={() => setDatePicker(null)}><Text style={styles.linkText}>Done</Text></TouchableOpacity>
                                     )}
-                                    <View style={[styles.panelTitleRow, { marginTop: 14 }]}><Wallet size={14} color={colors.primary} /><Text style={styles.panelTitle}>Budget (optional)</Text></View>
-                                    <PillInput value={budget} onChangeText={(v) => setBudget(v.replace(/[^0-9.]/g, ""))} placeholder="15000" keyboardType="decimal-pad" />
-                                    <Text style={[styles.panelTitle, { marginTop: 14 }]}>Currency</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hChips}>
-                                        {CURRENCIES.map((c) => chip(c, currency === c, () => setCurrency(c)))}
-                                    </ScrollView>
+                                    <View style={[styles.panelTitleRow, { marginTop: 14 }]}><Wallet size={14} color={colors.primary} /><Text style={styles.panelTitle}>Budget</Text></View>
+                                    <PillInput value={budget} onChangeText={(v) => { setBudget(v.replace(/[^0-9.]/g, "")); if (settingsError) setSettingsError(""); }} placeholder="15000" keyboardType="decimal-pad" />
                                 </View>
                             )}
 
-                            {type === "business" && (
-                                <View style={styles.panel}>
-                                    <View style={styles.switchRow}>
-                                        <View style={{ flex: 1 }}>
-                                            <View style={styles.panelTitleRow}><Receipt size={14} color={colors.primary} /><Text style={styles.panelTitle}>Receipt required</Text></View>
-                                            <Text style={styles.hint}>Every expense must have a bill photo</Text>
-                                        </View>
-                                        <Switch value={receiptRequired} onValueChange={setReceiptRequired}
-                                            trackColor={{ false: "#E5E7EB", true: colors.primary }} thumbColor="#fff" ios_backgroundColor="#E5E7EB" />
+                            <SelectField label="Currency" value={currency} onChange={setCurrency}
+                                options={CURRENCIES.map((c) => ({ key: c, label: c }))} />
+
+                            <SelectField label="Split" value={splitMode} onChange={(v) => { setSplitMode(v); if (settingsError) setSettingsError(""); }}
+                                options={[
+                                    { key: "equal", label: "Equally", hint: "Everyone pays the same" },
+                                    { key: "shares", label: "By shares", hint: "Bigger room = 2 shares" },
+                                    { key: "percent", label: "By percent", hint: "Each person pays a fixed %" },
+                                ]} />
+                            {splitMode === "shares" ? <ShareSplitEditor people={selected} shares={shares} onChange={setShares} /> : null}
+                            {splitMode === "percent" ? <PercentSplitEditor people={selected} percents={percents} onChange={(v) => { setPercents(v); if (settingsError) setSettingsError(""); }} /> : null}
+
+                            <View style={styles.panel}>
+                                <View style={styles.switchRow}>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={styles.panelTitleRow}><Receipt size={14} color={colors.primary} /><Text style={styles.panelTitle}>Receipt required</Text></View>
+                                        <Text style={styles.hint}>Every expense must have a bill photo</Text>
                                     </View>
-                                    <Text style={[styles.panelTitle, { marginTop: 14 }]}>Currency</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hChips}>
-                                        {CURRENCIES.map((c) => chip(c, currency === c, () => setCurrency(c)))}
-                                    </ScrollView>
+                                    <Switch value={receiptRequired} onValueChange={setReceiptRequired}
+                                        trackColor={{ false: "#E5E7EB", true: colors.primary }} thumbColor="#fff" ios_backgroundColor="#E5E7EB" />
                                 </View>
-                            )}
-
-                            {/* Split: chosen once, here - not on every expense */}
-                            <View style={{ marginTop: 6 }}>
-                                <Text style={styles.panelTitle}>How do you split expenses?</Text>
-                                <View style={[styles.twoCol, { marginTop: 8 }]}>
-                                    {[
-                                        { key: "equal", title: "Equally", hint: "Everyone pays the same" },
-                                        { key: "shares", title: "By shares", hint: "Bigger room = 2 shares" },
-                                    ].map((o) => {
-                                        const on = splitMode === o.key;
-                                        return (
-                                            <TouchableOpacity key={o.key} onPress={() => { tap(); setSplitMode(o.key); }} activeOpacity={0.85}
-                                                style={[styles.splitOpt, on && { backgroundColor: t.ink, borderColor: t.ink }]}
-                                                accessibilityState={{ selected: on }}>
-                                                <Text style={[styles.splitTitle, on && { color: t.onInk }]}>{o.title}</Text>
-                                                <Text style={[styles.splitHint, on && { color: t.onInk, opacity: 0.75 }]}>{o.hint}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
+                                <View style={[styles.switchRow, { marginTop: 14 }]}>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={styles.panelTitleRow}><UserCheck size={14} color={colors.primary} /><Text style={styles.panelTitle}>Approve people who join by link</Text></View>
+                                        <Text style={styles.hint}>Link joins wait for your OK</Text>
+                                    </View>
+                                    <Switch value={joinApproval} onValueChange={setJoinApproval}
+                                        trackColor={{ false: "#E5E7EB", true: colors.primary }} thumbColor="#fff" ios_backgroundColor="#E5E7EB" />
                                 </View>
-                                {splitMode === "shares" ? (
-                                    <Text style={[styles.hint, { marginTop: 6 }]}>Everyone starts with 1 share - set each person&apos;s shares in Group settings once they join.</Text>
-                                ) : null}
                             </View>
-                        </View>
-                    )}
 
-                    {/* ── Step 3: people ── */}
-                    {step === 2 && (
-                        <View style={styles.gutter}>
-                            <PeoplePicker selected={selected} onChange={setSelected} autoFocus={false} />
+                            {settingsError ? <Text style={styles.errorText}>{settingsError}</Text> : null}
                         </View>
                     )}
                 </ScrollView>
@@ -388,22 +400,25 @@ export default function CreateGroupScreen() {
                             label={`Continue with ${GROUP_TYPES[DEFAULT_TYPE].label}`} />
                     </View>
                 )}
-                {step > 0 && (
+                {step === 1 && (
                     <View style={[styles.footer, { paddingBottom: footerBottomPadding }]}>
-                        {step === 1 ? (
-                            <PillButton variant="primary" onPress={goToPeople} disabled={!trimmed} label="Next" />
-                        ) : (
-                            <View style={styles.twoCol}>
-                                {!selected.length && (
-                                    <PillButton variant="secondary" onPress={createGroup} disabled={creating} label="Skip for now" style={{ flex: 1 }} />
-                                )}
-                                <PillButton variant="primary" onPress={createGroup} loading={creating} disabled={creating}
-                                    label={selected.length ? `Create & add ${selected.length}` : "Create group"} style={{ flex: 1 }} />
-                            </View>
-                        )}
+                        <PillButton variant="primary" onPress={goToSettings} disabled={!trimmed} label="Next" />
+                    </View>
+                )}
+                {step === 2 && (
+                    <View style={[styles.footer, { paddingBottom: footerBottomPadding }]}>
+                        <PillButton variant="primary" onPress={createGroup} loading={creating} disabled={creating}
+                            label={selected.length ? `Create & add ${selected.length}` : "Create group"} />
                     </View>
                 )}
             </KeyboardAvoidingView>
+
+            <BottomSheet visible={iconSheet} onClose={() => setIconSheet(false)} backgroundColor={colors.background}
+                header={<Text style={styles.sheetTitle}>Choose an icon</Text>}>
+                <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
+                    <GroupIconPicker value={icon} onChange={(k) => { setIcon(k); setIconSheet(false); }} colors={colors} tint={colors.primary} />
+                </ScrollView>
+            </BottomSheet>
 
             <InviteModal groupId={createdId} visible={!!createdId} onClose={goToGroup} />
         </SafeAreaView>
@@ -414,6 +429,8 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     scroll: { paddingTop: 4, paddingBottom: 30 },
     gutter: { paddingHorizontal: SCREEN_GUTTER, gap: 12 },
+    sectionTitle: { fontSize: 13, fontWeight: "700", color: colors.text, marginTop: 8 },
+    sheetTitle: { fontSize: 17, fontWeight: "800", color: colors.text, marginBottom: 8 },
     lead: { fontSize: 15, color: colors.textSecondary, marginBottom: 4 },
 
     typeCard: {

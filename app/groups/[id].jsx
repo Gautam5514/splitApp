@@ -767,23 +767,37 @@ export default function GroupDetailPage() {
                             </RoundButton>
                         </View>
                         <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-                            <Block padded={false} style={styles.listBlock}>
-                                {(group.members || []).map((m) => (
-                                    <ListRow
+                            <Block padded={false} style={styles.modalListBlock}>
+                                {(group.members || []).map((m, idx, arr) => (
+                                    <View
                                         key={m._id}
-                                        leading={
-                                            m.photoURL ? (
-                                                <Image source={{ uri: m.photoURL }} style={styles.avatar} />
-                                            ) : (
-                                                <View style={styles.avatarPlaceholder}>
-                                                    <Text style={styles.avatarText}>{m.name ? m.name.charAt(0).toUpperCase() : "U"}</Text>
-                                                </View>
-                                            )
-                                        }
-                                        title={m.name || "Unnamed User"}
-                                        subtitle={m.email}
-                                        trailing={
-                                            String(group.createdBy?._id) === String(m._id) ? (
+                                        style={[
+                                            styles.memberRow,
+                                            idx < arr.length - 1 && styles.memberRowDivider,
+                                        ]}
+                                    >
+                                        {m.photoURL ? (
+                                            <Image source={{ uri: m.photoURL }} style={styles.avatar} />
+                                        ) : (
+                                            <View style={styles.avatarPlaceholder}>
+                                                <Text style={styles.avatarText}>{m.name ? m.name.charAt(0).toUpperCase() : "U"}</Text>
+                                            </View>
+                                        )}
+                                        <View style={styles.memberRowText}>
+                                            <Text style={styles.memberName} numberOfLines={1}>
+                                                {m.name || "Unnamed User"}
+                                            </Text>
+                                            <Text
+                                                style={styles.memberEmail}
+                                                numberOfLines={1}
+                                                adjustsFontSizeToFit
+                                                minimumFontScale={0.75}
+                                            >
+                                                {m.email}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.memberRowTrailing}>
+                                            {String(group.createdBy?._id) === String(m._id) ? (
                                                 <View style={styles.creatorBadge}>
                                                     <Text style={styles.creatorBadgeText}>Creator</Text>
                                                 </View>
@@ -791,9 +805,9 @@ export default function GroupDetailPage() {
                                                 <RoundButton label="Remove member" size={36} onPress={() => handleRemove(m._id, m.name)}>
                                                     <X size={15} color={colors.textSecondary} />
                                                 </RoundButton>
-                                            ) : null
-                                        }
-                                    />
+                                            ) : null}
+                                        </View>
+                                    </View>
                                 ))}
                             </Block>
                             {isCreator && (
@@ -1042,6 +1056,38 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
     listBlock: {
         paddingVertical: 6,
     },
+    modalListBlock: {
+        marginHorizontal: 0,
+        paddingVertical: 6,
+    },
+    memberRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+    },
+    memberRowDivider: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: colors.border,
+    },
+    memberRowText: {
+        flex: 1,
+        minWidth: 0,
+        gap: 3,
+    },
+    memberName: {
+        fontSize: 17,
+        fontWeight: "600",
+        color: colors.text,
+    },
+    memberEmail: {
+        fontSize: 14.5,
+        color: colors.textSecondary,
+    },
+    memberRowTrailing: {
+        flexShrink: 0,
+    },
     avatar: {
         width: 48,
         height: 48,
@@ -1138,6 +1184,7 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         borderTopRightRadius: 28,
         paddingHorizontal: SCREEN_GUTTER,
         paddingTop: 10,
+        minHeight: "45%",
         maxHeight: "80%",
     },
     sheetHandle: {
