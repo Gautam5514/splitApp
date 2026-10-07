@@ -26,7 +26,6 @@ export default function GroupSettingsSheet({ visible, group, hasExpenses, onClos
             startDate: group.trip?.startDate ? new Date(group.trip.startDate) : null,
             endDate: group.trip?.endDate ? new Date(group.trip.endDate) : null,
             budget: group.trip?.budget != null ? String(group.trip.budget) : "",
-            billDay: group.roommate?.billDay || null,
             currency: group.settings?.currency || "INR",
             receiptRequired: !!group.settings?.receiptRequired,
             joinApproval: !!group.settings?.joinApproval,
@@ -58,7 +57,6 @@ export default function GroupSettingsSheet({ visible, group, hasExpenses, onClos
         };
         if (!hasExpenses) body.settings.currency = f.currency;
         if (f.groupType === "trip") body.trip = { startDate: toYmd(f.startDate), endDate: toYmd(f.endDate), budget: f.budget === "" ? null : f.budget };
-        if (f.groupType === "roommate") body.roommate = { billDay: f.billDay };
         try {
             setSaving(true);
             const res = await api.patch(`/groups/${group._id}/settings`, body);
@@ -129,16 +127,6 @@ export default function GroupSettingsSheet({ visible, group, hasExpenses, onClos
                         {Platform.OS === "ios" && datePicker ? <TouchableOpacity onPress={() => setDatePicker(null)}><Text style={styles.link}>Done</Text></TouchableOpacity> : null}
                         <Text style={styles.label}>Budget</Text>
                         <PillInput value={f.budget} onChangeText={(v) => set({ budget: v.replace(/[^0-9.]/g, "") })} placeholder="No budget" keyboardType="decimal-pad" />
-                    </View>
-                )}
-
-                {f.groupType === "roommate" && (
-                    <View>
-                        <Text style={styles.label}>Rent / bills due on</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                            {chip("Not set", !f.billDay, () => set({ billDay: null }), "none")}
-                            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => chip(`Day ${d}`, f.billDay === d, () => set({ billDay: d }), `d${d}`))}
-                        </ScrollView>
                     </View>
                 )}
 

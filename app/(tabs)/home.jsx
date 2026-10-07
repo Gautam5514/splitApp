@@ -456,56 +456,6 @@ export default function Dashboard() {
                     </Block>
                 )}
 
-                {/* Spending Trajectory */}
-                {showCharts && hasTrends && (
-                    <>
-                        <SectionLabel>Spending Trajectory</SectionLabel>
-                        <Block>
-                            <View style={styles.cardHeadRow}>
-                                <Landmark size={16} color={CHART_CYAN} />
-                                <Text style={styles.cardSub}>Monthly breakdown of travel settlements this year</Text>
-                            </View>
-                            <SpendingAreaChart data={analytics.trends} width={chartW} height={210} color={CHART_CYAN} colors={colors} />
-                        </Block>
-                    </>
-                )}
-
-                {/* Expense Allocations */}
-                {showCharts && pieData.length > 0 && (
-                    <>
-                        <SectionLabel>Expense Allocations</SectionLabel>
-                        <Block>
-                            <View style={styles.cardHeadRow}>
-                                <PieIcon size={16} color="#14B8A6" />
-                                <Text style={styles.cardSub}>Distribution of shares by top categories</Text>
-                            </View>
-                            <View style={styles.donutRow}>
-                                <View style={styles.donutWrap}>
-                                    <DonutRing data={pieData} size={140} strokeWidth={18} trackColor={colors.border} />
-                                    <View style={styles.donutCenter} pointerEvents="none">
-                                        <Text style={styles.donutCenterLabel}>SPENT</Text>
-                                        <Text style={styles.donutCenterValue}>₹{totalCategorySpend.toLocaleString("en-IN")}</Text>
-                                    </View>
-                                </View>
-                                <View style={styles.legend}>
-                                    {pieData.map((item, idx) => {
-                                        const pct = ((item.value / (totalCategorySpend || 1)) * 100).toFixed(0);
-                                        return (
-                                            <View key={idx} style={styles.legendRow}>
-                                                <View style={styles.legendLeft}>
-                                                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                                                    <Text style={styles.legendName} numberOfLines={1}>{item.name}</Text>
-                                                </View>
-                                                <Text style={styles.legendPct}>{pct}%</Text>
-                                            </View>
-                                        );
-                                    })}
-                                </View>
-                            </View>
-                        </Block>
-                    </>
-                )}
-
                 {/* Recent Activity */}
                 <SectionLabel>Recent Activity</SectionLabel>
                 {recentExpenses.length > 0 ? (
@@ -582,6 +532,56 @@ export default function Dashboard() {
                                     </TouchableOpacity>
                                 </View>
                             ))}
+                        </Block>
+                    </>
+                )}
+
+                {/* Spending Trajectory */}
+                {showCharts && hasTrends && (
+                    <>
+                        <SectionLabel>Spending Trajectory</SectionLabel>
+                        <Block>
+                            <View style={styles.cardHeadRow}>
+                                <Landmark size={16} color={CHART_CYAN} />
+                                <Text style={styles.cardSub}>Monthly breakdown of travel settlements this year</Text>
+                            </View>
+                            <SpendingAreaChart data={analytics.trends} width={chartW} height={210} color={CHART_CYAN} colors={colors} />
+                        </Block>
+                    </>
+                )}
+
+                {/* Expense Allocations */}
+                {showCharts && pieData.length > 0 && (
+                    <>
+                        <SectionLabel>Expense Allocations</SectionLabel>
+                        <Block>
+                            <View style={styles.cardHeadRow}>
+                                <PieIcon size={16} color="#14B8A6" />
+                                <Text style={styles.cardSub}>Distribution of shares by top categories</Text>
+                            </View>
+                            <View style={styles.donutRow}>
+                                <View style={styles.donutWrap}>
+                                    <DonutRing data={pieData} size={140} strokeWidth={18} trackColor={colors.border} />
+                                    <View style={styles.donutCenter} pointerEvents="none">
+                                        <Text style={styles.donutCenterLabel}>SPENT</Text>
+                                        <Text style={styles.donutCenterValue}>₹{totalCategorySpend.toLocaleString("en-IN")}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.legend}>
+                                    {pieData.map((item, idx) => {
+                                        const pct = ((item.value / (totalCategorySpend || 1)) * 100).toFixed(0);
+                                        return (
+                                            <View key={idx} style={styles.legendRow}>
+                                                <View style={styles.legendLeft}>
+                                                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                                                    <Text style={styles.legendName} numberOfLines={1}>{item.name}</Text>
+                                                </View>
+                                                <Text style={styles.legendPct}>{pct}%</Text>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </View>
                         </Block>
                     </>
                 )}

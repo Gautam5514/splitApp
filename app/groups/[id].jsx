@@ -10,7 +10,6 @@ import AddPeopleSheet from "@/components/people/AddPeopleSheet";
 import GroupSettingsSheet from "@/components/group/GroupSettingsSheet";
 import GroupTypeCard from "@/components/group/GroupTypeCard";
 import PendingMembers from "@/components/group/PendingMembers";
-import RecurringBills from "@/components/group/RecurringBills";
 import { formatMoney, groupTypeMeta } from "@/lib/groupPresets";
 import NotepadSection from "@/components/Notepad/NotepadSection";
 import OcrViewModal from "@/components/OcrViewModal";
@@ -23,6 +22,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import {
     Bus,
     CheckCircle2,
+    ChevronRight,
     Coffee,
     LogOut,
     Settings2,
@@ -51,6 +51,7 @@ import {
     Modal,
     ScrollView,
     StyleSheet,
+    TouchableOpacity,
     View,
 } from "react-native";
 import { Text } from "@/components/ui/Typography";
@@ -514,7 +515,6 @@ export default function GroupDetailPage() {
                     summary={summary}
                     isCreator={isCreator}
                     onOpenSettings={() => setShowSettings(true)}
-                    onOpenBills={() => {}}
                     onEditLook={() => setShowIconPicker(true)}
                 />
 
@@ -621,11 +621,6 @@ export default function GroupDetailPage() {
                     onCancelSettlement={handleCancelSettlement}
                 />
 
-                {/* Monthly bills — shown after Smart Settlements for roommate groups */}
-                {group.groupType === "roommate" && (
-                    <RecurringBills group={group} meId={userId} onChanged={fetchSummary} />
-                )}
-
                 {/* Notepad — only when the creator has enabled it */}
                 {notepadEnabled && <NotepadSection groupId={groupId} />}
             </ScrollView>
@@ -684,56 +679,76 @@ export default function GroupDetailPage() {
             />
 
             {/* Group actions menu (three-dot) */}
-            <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+            <Modal visible={showMenu} transparent animationType="slide" onRequestClose={() => setShowMenu(false)}>
                 <View style={styles.modalOverlay}>
-                    <View style={[styles.modalSheet, { paddingBottom: sheetBottomPadding }]}>
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={() => setShowMenu(false)}
+                        accessibilityLabel="Dismiss menu"
+                    />
+                    <View style={[styles.actionSheet, { paddingBottom: sheetBottomPadding }]}>
                         <View style={styles.sheetHandle} />
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Group actions</Text>
-                            <RoundButton label="Close" size={36} onPress={() => setShowMenu(false)}>
-                                <X size={18} color={colors.textSecondary} />
-                            </RoundButton>
-                        </View>
-                        <Block padded={false} style={styles.listBlock}>
-                            <ListRow
-                                leading={<IconCircle size={44}><Settings2 size={19} color={colors.primary} /></IconCircle>}
-                                title="Group settings" subtitle="Type, budget, split & more" chevron
+
+                        <View style={styles.actionGroup}>
+                            <ActionItem
+                                styles={styles}
+                                chevronColor={colors.textSecondary}
+                                icon={<Settings2 size={19} color={colors.primary} />}
+                                tint={colors.primaryLight}
+                                title="Group settings"
                                 onPress={() => { setShowMenu(false); setShowSettings(true); }}
                             />
-                            <ListRow
-                                leading={<IconCircle size={44}><UserPlus size={19} color={colors.primary} /></IconCircle>}
-                                title="Add people" subtitle="Invite friends to this group" chevron
+                            <ActionItem
+                                styles={styles}
+                                chevronColor={colors.textSecondary}
+                                icon={<UserPlus size={19} color={colors.primary} />}
+                                tint={colors.primaryLight}
+                                title="Add people"
                                 onPress={() => { setShowMenu(false); setShowAddPeople(true); }}
                             />
-                            <ListRow
-                                leading={<IconCircle size={44}><Camera size={19} color={colors.primary} /></IconCircle>}
-                                title="Group photo & icon" chevron
+                            <ActionItem
+                                styles={styles}
+                                chevronColor={colors.textSecondary}
+                                icon={<Camera size={19} color={colors.primary} />}
+                                tint={colors.primaryLight}
+                                title="Group photo & icon"
                                 onPress={() => { setShowMenu(false); setShowIconPicker(true); }}
                             />
-                            <ListRow
-                                leading={
-                                    <IconCircle size={44} tint={notepadEnabled ? "rgba(16,185,129,0.12)" : undefined}>
-                                        <NotebookPen size={19} color={notepadEnabled ? "#10B981" : colors.primary} />
-                                    </IconCircle>
-                                }
+                            <ActionItem
+                                styles={styles}
+                                chevronColor={colors.textSecondary}
+                                icon={<NotebookPen size={19} color={notepadEnabled ? "#10B981" : colors.primary} />}
+                                tint={notepadEnabled ? "rgba(16,185,129,0.14)" : colors.primaryLight}
                                 title={notepadEnabled ? "Disable notepad" : "Add notepad"}
-                                subtitle={notepadEnabled ? "Members can see & use it" : "Let members plan together"}
-                                chevron
                                 onPress={() => { setShowMenu(false); handleToggleNotepad(); }}
+                                last={group.isCompleted}
                             />
                             {!group.isCompleted && (
-                                <ListRow
-                                    leading={<IconCircle size={44} tint="rgba(16,185,129,0.12)"><CheckCircle2 size={19} color="#10B981" /></IconCircle>}
-                                    title="Mark as completed" subtitle="Move to completed trips" chevron
+                                <ActionItem
+                                    styles={styles}
+                                    chevronColor={colors.textSecondary}
+                                    icon={<CheckCircle2 size={19} color="#10B981" />}
+                                    tint="rgba(16,185,129,0.14)"
+                                    title="Mark as completed"
                                     onPress={() => { setShowMenu(false); handleMarkCompleted(); }}
+                                    last
                                 />
                             )}
-                            <ListRow
-                                leading={<IconCircle size={44} tint="rgba(220,38,38,0.12)"><Trash2 size={19} color="#DC2626" /></IconCircle>}
-                                title="Delete group" danger chevron
+                        </View>
+
+                        <View style={styles.actionGroup}>
+                            <ActionItem
+                                styles={styles}
+                                chevronColor={colors.textSecondary}
+                                icon={<Trash2 size={19} color="#DC2626" />}
+                                tint="rgba(220,38,38,0.12)"
+                                title="Delete group"
+                                danger
                                 onPress={() => { setShowMenu(false); handleDeleteTrip(); }}
+                                last
                             />
-                        </Block>
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -896,7 +911,83 @@ export default function GroupDetailPage() {
     );
 }
 
+// ── Premium full-width action row for the group three-dot sheet ───────────────
+function ActionItem({ styles, icon, tint, title, subtitle, onPress, danger, last, chevronColor }) {
+    return (
+        <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={onPress}
+            style={[styles.actionItem, !last && styles.actionItemDivider]}
+            accessibilityRole="button"
+            accessibilityLabel={title}
+        >
+            <View style={[styles.actionIcon, { backgroundColor: tint }]}>{icon}</View>
+            <View style={styles.actionItemCopy}>
+                <Text style={[styles.actionItemTitle, danger && styles.actionItemTitleDanger]} numberOfLines={1}>
+                    {title}
+                </Text>
+                {subtitle ? <Text style={styles.actionItemSub} numberOfLines={1}>{subtitle}</Text> : null}
+            </View>
+            <ChevronRight size={18} color={danger ? "#DC2626" : (chevronColor || "#9CA3AF")} />
+        </TouchableOpacity>
+    );
+}
+
 const getStyles = (colors, isDark, t) => StyleSheet.create({
+    // Compact three-dot action sheet
+    actionSheet: {
+        backgroundColor: colors.background,
+        borderTopLeftRadius: 26,
+        borderTopRightRadius: 26,
+        paddingHorizontal: SCREEN_GUTTER,
+        paddingTop: 8,
+    },
+    actionGroup: {
+        backgroundColor: t.surfaceAlt || colors.card,
+        borderRadius: 18,
+        overflow: "hidden",
+        marginBottom: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.border,
+    },
+    actionItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 14,
+        width: "100%",
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+    },
+    actionItemDivider: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: colors.border,
+    },
+    actionIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 11,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    actionItemCopy: {
+        flex: 1,
+        minWidth: 0,
+    },
+    actionItemTitle: {
+        fontSize: 15.5,
+        fontWeight: "600",
+        color: colors.text,
+        letterSpacing: -0.2,
+    },
+    actionItemTitleDanger: {
+        color: "#DC2626",
+    },
+    actionItemSub: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        marginTop: 2,
+    },
+
     addPeopleBtn: { marginHorizontal: SCREEN_GUTTER, marginTop: 12, marginBottom: 24 },
     quickRow: { flexDirection: "row", gap: 10, paddingHorizontal: SCREEN_GUTTER, marginBottom: 20 },
     quickBtn: { flex: 1 },

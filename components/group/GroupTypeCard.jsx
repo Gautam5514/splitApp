@@ -3,7 +3,7 @@ import { Text } from "@/components/ui/Typography";
 import { getGroupIcon } from "@/lib/groupIcons";
 import { formatMoney, groupTypeMeta } from "@/lib/groupPresets";
 import { LinearGradient } from "expo-linear-gradient";
-import { CalendarDays, Receipt, Repeat, Settings2, TrendingUp, TriangleAlert, UserRoundCheck } from "lucide-react-native";
+import { CalendarDays, Receipt, Settings2, TrendingUp, TriangleAlert, UserRoundCheck } from "lucide-react-native";
 import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
 const fmtDay = (d) => new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
@@ -13,7 +13,7 @@ const fmtDay = (d) => new Date(d).toLocaleDateString(undefined, { day: "numeric"
  * Trip = budget meter, day X of Y, per-day, who pays next · Roommates = this
  * month, next bill · Business = receipts missing · Other = total.
  */
-export default function GroupTypeCard({ group, summary, isCreator, onOpenSettings, onOpenBills, onEditLook }) {
+export default function GroupTypeCard({ group, summary, isCreator, onOpenSettings, onEditLook }) {
     const { colors, t } = useDesign();
     const styles = getStyles(colors, t);
     const type = group.groupType || "general";
@@ -83,7 +83,6 @@ export default function GroupTypeCard({ group, summary, isCreator, onOpenSetting
         );
     } else if (type === "roommate") {
         const diff = summary.thisMonth - summary.lastMonth;
-        const bills = summary.upcomingBills || [];
         const month = new Date().toLocaleDateString(undefined, { month: "long" });
         body = (
             <>
@@ -91,9 +90,6 @@ export default function GroupTypeCard({ group, summary, isCreator, onOpenSetting
                     {stat(`${month} total`, money(summary.thisMonth), summary.lastMonth ? `${diff >= 0 ? "+" : "-"}${money(Math.abs(diff))} vs last month` : "First month")}
                     {stat("Your share", money(summary.myShare), `You paid ${money(summary.myPaid)}`)}
                 </View>
-                {bills.length
-                    ? link(Repeat, `Next: ${bills[0].description} ${money(bills[0].amount)} on ${fmtDay(bills[0].nextRunAt)}${bills.length > 1 ? ` · +${bills.length - 1}` : ""}`, onOpenBills)
-                    : link(Repeat, "Set up monthly bills (rent, WiFi…)", onOpenBills)}
             </>
         );
     } else if (type === "business") {

@@ -72,10 +72,43 @@ export default function GroupBalanceSection({
     };
 
     const money = (v) => formatMoney(v, currency);
-    // upi:// deep link - opens GPay/PhonePe/Paytm with payee + amount filled in.
+    // upi:// deep link - opens GPay/PhonePe/Paytm with the payee, amount AND a
+    // human description auto-filled. `am` = amount, `tn` = transaction note
+    // (the description the UPI app shows and pre-fills), `tr` = a reference id.
+    const buildUpiUrl = (s) => {
+        const desc = `SplitEase: ${groupName || "settlement"} — pay ${s.to.name || ""}`.trim().slice(0, 80);
+        const ref = `SE${Date.now().toString().slice(-10)}`;
+        const params = [
+            `pa=${encodeURIComponent(s.to.upiId)}`,
+            `pn=${encodeURIComponent(s.to.name || "")}`,
+            `am=${Number(s.amount).toFixed(2)}`,
+            `cu=INR`,
+            `tn=${encodeURIComponent(desc)}`,
+            `tr=${encodeURIComponent(ref)}`,
+        ];
+        return `upi://pay?${params.join("&")}`;
+    };
+
+    const openUpiApp = (s) => {
+        const url = buildUpiUrl(s);
+        Linking.openURL(url).catch(() =>
+            Alert.alert("No UPI app found", "Install a UPI app like GPay or PhonePe, or pay another way.")
+        );
+    };
+
+    // Icon tap → "Are you sure you want to pay?" → yes → redirect straight to
+    // the UPI app (amount + description pre-filled). We deliberately do NOT
+    // touch the balance here: UPI gives no success callback, so the user comes
+    // back and taps "I've Paid" to file the settlement request themselves.
     const payViaUpi = (s) => {
-        const url = `upi://pay?pa=${encodeURIComponent(s.to.upiId)}&pn=${encodeURIComponent(s.to.name || "")}&am=${Number(s.amount).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`SplitEase: ${groupName}`.slice(0, 50))}`;
-        Linking.openURL(url).catch(() => Alert.alert("No UPI app found", "Install a UPI app like GPay or PhonePe, or pay another way."));
+        Alert.alert(
+            "Pay with UPI",
+            `Pay ${money(Number(s.amount).toFixed(0))} to ${s.to.name}?\n\nThis opens your UPI app with the amount already filled in. After paying, come back and tap "I've Paid" so ${s.to.name} can confirm.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Yes, Pay", style: "default", onPress: () => openUpiApp(s) },
+            ]
+        );
     };
 
     const hasBalances = balances?.balances?.length > 0;
@@ -88,6 +121,25 @@ export default function GroupBalanceSection({
                 String(r.fromUserId._id) === String(s.from.userId) &&
                 String(r.toUserId._id) === String(s.to.userId)
         );
+
+    // Pending requests the current user is a party to that DON'T match any
+    // smart-settlement suggestion (the greedy debt-minimizer reroutes debt, so
+    // a real A->B request often has no A->B suggestion). These would otherwise
+    // be invisible - the counterparty could never confirm and the initiator
+    // could never cancel, leaving the debt stuck. Surface them standalone.
+    const shownPendingIds = new Set(
+        (balances?.suggestions || [])
+            .map((s) => findPendingFor(s))
+            .filter(Boolean)
+            .map((r) => String(r._id))
+    );
+    const orphanPending = (pendingSettlements || []).filter((r) => {
+        if (shownPendingIds.has(String(r._id))) return false;
+        return (
+            String(r.fromUserId._id) === String(meId) ||
+            String(r.toUserId._id) === String(meId)
+        );
+    });
 
     const openForm = (i) => {
         setActiveForm(i);
@@ -298,12 +350,29 @@ export default function GroupBalanceSection({
                                             {(s.to.upiId || s.to.upiQrUrl) && currency === "INR" ? (
                                                 <PillButton
                                                     variant="primary"
-                                                    onPress={() => { setCopied(false); setPayTarget(s); }}
+                                                    onPress={() => {
+                                                        // Direct UPI ID → confirm then redirect straight
+                                                        // to the UPI app. QR-only → open the scan sheet.
+                                                        if (s.to.upiId) payViaUpi(s);
+                                                        else { setCopied(false); setPayTarget(s); }
+                                                    }}
                                                     icon={<Smartphone size={16} color={t.onInk} />}
                                                     label={`Pay ${money(amt)} to ${s.to.name}`}
                                                     style={styles.actionBtn}
                                                     textStyle={styles.actionBtnText}
                                                 />
+                                            ) : null}
+                                            {/* When a UPI ID exists, still let them open the full
+                                                sheet (QR + copy) as a fallback / alternative. */}
+                                            {s.to.upiId && s.to.upiQrUrl && currency === "INR" ? (
+                                                <TouchableOpacity
+                                                    onPress={() => { setCopied(false); setPayTarget(s); }}
+                                                    activeOpacity={0.7}
+                                                    style={styles.payAltRow}
+                                                >
+                                                    <QrCode size={13} color={colors.textSecondary} />
+                                                    <Text style={styles.payAltText}>Show QR / UPI ID instead</Text>
+                                                </TouchableOpacity>
                                             ) : null}
                                             <PillButton
                                                 variant="secondary"
@@ -335,6 +404,47 @@ export default function GroupBalanceSection({
                                             Suggestion #{i + 1}
                                         </Text>
                                     )}
+                                </Block>
+                            );
+                        })}
+                    </View>
+                </>
+            )}
+
+            {/* Pending settlements the user is a party to but that have no
+                matching suggestion row (debt got rerouted). Always confirmable. */}
+            {orphanPending.length > 0 && (
+                <>
+                    <SectionLabel right={<Clock size={16} color={colors.warning} />}>
+                        Pending Settlements
+                    </SectionLabel>
+                    <View style={styles.suggestionsList}>
+                        {orphanPending.map((pending) => {
+                            const fromMe = String(pending.fromUserId._id) === String(meId);
+                            const toMe = String(pending.toUserId._id) === String(meId);
+                            return (
+                                <Block key={pending._id} style={styles.suggestionItem}>
+                                    <Text style={styles.suggestionText}>
+                                        <Text style={styles.suggestionFrom}>
+                                            {fromMe ? "You" : pending.fromUserId.name}
+                                        </Text>
+                                        <Text style={styles.suggestionNormal}> → </Text>
+                                        <Text style={styles.suggestionTo}>
+                                            {toMe ? "You" : pending.toUserId.name}
+                                        </Text>
+                                        <Text style={styles.suggestionNormal}> · </Text>
+                                        <Text style={styles.suggestionAmount}>{money(Number(pending.amount).toFixed(0))}</Text>
+                                    </Text>
+                                    <PendingSettlementRow
+                                        pending={pending}
+                                        meId={meId}
+                                        money={money}
+                                        colors={colors}
+                                        styles={styles}
+                                        onConfirm={onConfirmSettlement}
+                                        onReject={onRejectSettlement}
+                                        onCancel={onCancelSettlement}
+                                    />
                                 </Block>
                             );
                         })}
@@ -408,7 +518,7 @@ export default function GroupBalanceSection({
                                 {payTarget.to.upiId ? (
                                     <PillButton
                                         variant="primary"
-                                        onPress={() => payViaUpi(payTarget)}
+                                        onPress={() => openUpiApp(payTarget)}
                                         icon={<Smartphone size={16} color={t.onInk} />}
                                         label="Open UPI app"
                                         style={styles.sheetPrimaryBtn}
@@ -661,6 +771,18 @@ const getStyles = (colors, t) => StyleSheet.create({
         color: colors.textSecondary,
         textAlign: "center",
         paddingVertical: 2,
+    },
+    payAltRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        paddingVertical: 4,
+    },
+    payAltText: {
+        fontSize: 12.5,
+        fontWeight: "600",
+        color: colors.textSecondary,
     },
 
     // Payment bottom sheet

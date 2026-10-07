@@ -71,7 +71,6 @@ export default function CreateGroupScreen() {
     const [datePicker, setDatePicker] = useState(null); // "start" | "end" | null
     const [budget, setBudget] = useState("");
     const [currency, setCurrency] = useState("INR");
-    const [billDay, setBillDay] = useState(null);
     const [receiptRequired, setReceiptRequired] = useState(false);
     const [splitMode, setSplitMode] = useState("equal"); // "equal" | "shares"
     const [selected, setSelected] = useState([]);
@@ -136,7 +135,6 @@ export default function CreateGroupScreen() {
             setCreating(true);
             const body = { name: trimmed, groupType: type, icon: photo ? null : icon };
             if (type === "trip") body.trip = { startDate: toYmd(startDate), endDate: toYmd(endDate), budget: budget || null };
-            if (type === "roommate" && billDay) body.roommate = { billDay };
             if (type === "trip" || type === "business") body.settings = { currency };
             if (type === "business") body.settings = { ...body.settings, receiptRequired };
             // How expenses are split is decided here, once - not on every expense.
@@ -330,17 +328,6 @@ export default function CreateGroupScreen() {
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hChips}>
                                         {CURRENCIES.map((c) => chip(c, currency === c, () => setCurrency(c)))}
                                     </ScrollView>
-                                </View>
-                            )}
-
-                            {type === "roommate" && (
-                                <View style={styles.panel}>
-                                    <View style={styles.panelTitleRow}><CalendarDays size={14} color={colors.primary} /><Text style={styles.panelTitle}>Rent / bills due on (optional)</Text></View>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hChips}>
-                                        {chip("Not set", !billDay, () => setBillDay(null), "none")}
-                                        {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => chip(`Day ${d}`, billDay === d, () => setBillDay(d), `d${d}`))}
-                                    </ScrollView>
-                                    <Text style={styles.hint}>Add rent, WiFi and other monthly bills as auto-repeat from the group.</Text>
                                 </View>
                             )}
 

@@ -192,7 +192,11 @@ const getStyles = (colors, t) => StyleSheet.create({
     panel: {
         width: "92%",
         maxHeight: "70%",
-        backgroundColor: t.surface,
+        // Use the solid card colour, not t.surface — in dark mode t.surface is
+        // only 7%-opaque white, so as a floating modal panel the dimmed page
+        // behind it bleeds through and the text overlaps. colors.card is a
+        // fully opaque elevated surface in both themes.
+        backgroundColor: colors.card,
         borderRadius: 28,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: t.outline,
