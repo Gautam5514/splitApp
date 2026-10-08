@@ -6,7 +6,7 @@
 
 ### Travel more. Worry less. Split effortlessly.
 
-**SplitEase** is a premium, AI-powered group expense manager for trips, roommates, and everyday hangouts — smart splitting, receipt scanning, real-time group chat, one-tap UPI settlement, and a rewards club, all in one app.
+**SplitEase** is a premium, AI powered group expense manager for trips, roommates, and everyday hangouts — smart splitting, receipt scanning, real-time group chat, one-tap UPI settlement, and a rewards club, all in one app.
 
 [![Get it on Google Play](https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png)](https://play.google.com/store/apps/details?id=com.kunal.splitapp)
 
