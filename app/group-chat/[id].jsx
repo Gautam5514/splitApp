@@ -1,4 +1,5 @@
 import GroupChatWindow from "@/components/groupchat/GroupChatWindow";
+import { logger } from "@/lib/logger";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { router, useLocalSearchParams } from "expo-router";
@@ -18,7 +19,7 @@ export default function GroupChatDetailScreen() {
                 const res = await api.get(`/groups/${params.id}`);
                 setGroup(res.data);
             } catch (err) {
-                console.error("Error fetching group details:", err);
+                logger.error("Error fetching group details:", err);
                 setGroup({ _id: params.id, name: params.name, members: [] });
             }
         };

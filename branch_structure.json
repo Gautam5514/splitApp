@@ -1,0 +1,21 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "chore/add-logger-facade",
+    "feat/expo-observe-sdk56",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "chore/add-logger-facade": "main",
+    "feat/expo-observe-sdk56": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "chore/add-logger-facade",
+    "feat/expo-observe-sdk56",
+    "origin"
+  ]
+}
