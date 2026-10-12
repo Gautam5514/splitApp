@@ -1,4 +1,5 @@
 import { Loader } from "@/components/Loader";
+import { logger } from "@/lib/logger";
 import MarkdownText from "@/components/chat/MarkdownText";
 import AI3DLogo from "@/components/icons/AI3DLogo";
 import AIThinking, { TypingDots } from "@/components/icons/AIThinking";
@@ -148,7 +149,7 @@ export default function AiChatScreen() {
                 : err?.response?.data?.message ||
                   err?.response?.data?.error ||
                   "SplitEase AI is unavailable right now. Please check your connection and try again.";
-            console.warn("AI request failed:", status ?? err?.code, errText);
+            logger.warn("AI request failed:", status ?? err?.code, errText);
             setMessages((prev) => [...prev, { role: "ai", content: errText, error: true, at: Date.now() }]);
         } finally {
             setLoading(false);

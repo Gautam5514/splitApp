@@ -1,4 +1,5 @@
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
+import { logger } from "@/lib/logger";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Loader } from "@/components/Loader";
 import { ChartSkeleton, RowListSkeleton } from "@/components/ui/Skeleton";
@@ -33,7 +34,7 @@ export default function ExpenseBreakdown() {
         setLoading(false);
       }
     } catch (error) {
-      console.log("Failed to load cached analytics:", error);
+      logger.log("Failed to load cached analytics:", error);
     }
   };
 
@@ -44,7 +45,7 @@ export default function ExpenseBreakdown() {
       setAnalytics(res.data);
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(res.data));
     } catch (error) {
-      console.error("Failed to load analytics:", error);
+      logger.error("Failed to load analytics:", error);
     } finally {
       setLoading(false);
       setIsFetching(false);

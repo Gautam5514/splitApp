@@ -1,4 +1,5 @@
 import InviteModal from "@/components/InviteModal";
+import { logger } from "@/lib/logger";
 import PendingInvitesList from "@/components/invites/PendingInvitesList";
 import { Alert } from "@/lib/alert";
 import { GroupListSkeleton } from "@/components/ui/Skeleton";
@@ -70,7 +71,7 @@ export default function TripsPage() {
             const allGroups = groupsRes?.data || [];
             setGroups(allGroups);
         } catch (err) {
-            console.warn("Failed to fetch groups:", err?.message || err);
+            logger.warn("Failed to fetch groups:", err?.message || err);
             Alert.alert("Error", "Failed to load groups. Please try again.");
         } finally {
             loadedOnceRef.current = true;
@@ -106,7 +107,7 @@ export default function TripsPage() {
             await api.put(`/groups/${groupId}/complete`, {});
             fetchMeAndGroups();
         } catch (_err) {
-            console.error("Failed to mark as completed");
+            logger.error("Failed to mark as completed");
         }
     }, [fetchMeAndGroups]);
 
@@ -145,7 +146,7 @@ export default function TripsPage() {
             fetchMeAndGroups();
             setSearchQuery("");
         } catch (err) {
-            console.warn("Error creating group:", err?.message || err);
+            logger.warn("Error creating group:", err?.message || err);
             Alert.alert("Error", "Could not create group. Please try again.");
         } finally {
             setCreating(false);

@@ -32,9 +32,7 @@ yarn-error.*
 *.pem
 
 # local env files
-.env
 .env*.local
-.env.*
 !.env.example
 
 # secrets / service credentials (do NOT commit — open source)
@@ -53,6 +51,6 @@ app-example
 /android
 
 # secrets — copy from the *.example files and fill in your own values
-.env
 google-services.json
 GoogleService-Info.plist
+config.bat

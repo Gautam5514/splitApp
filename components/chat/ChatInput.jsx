@@ -1,4 +1,5 @@
 import { Loader } from "@/components/Loader";
+import { logger } from "@/lib/logger";
 import { inkTokens } from "@/constants/layout";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
@@ -74,7 +75,7 @@ export default function ChatInput({ conversationId, onSend, isGroup = false, meI
                 socket.emit("sendMessage", res.data.data);
             }
         } catch (err) {
-            console.error("send message failed:", err);
+            logger.error("send message failed:", err);
             if (!isGroup) onSend?.(null, tempId);
             // Give the draft back so nothing the user typed is lost.
             setText(draftText);
@@ -111,7 +112,7 @@ export default function ChatInput({ conversationId, onSend, isGroup = false, meI
             const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.7 });
             if (!result.canceled && result.assets?.[0]) setFile(result.assets[0]);
         } catch (err) {
-            console.error("camera failed:", err);
+            logger.error("camera failed:", err);
             Alert.alert("Camera unavailable", "Couldn't open the camera on this device.");
         }
     };

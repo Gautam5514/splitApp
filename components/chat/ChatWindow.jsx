@@ -1,4 +1,5 @@
 import { useTheme } from "@/context/ThemeContext";
+import { logger } from "@/lib/logger";
 import { api } from "@/lib/api";
 import socket, { connectSocket } from "@/lib/socket";
 import { router } from "expo-router";
@@ -59,7 +60,7 @@ export default function ChatWindow({ activeFriend, onBack }) {
                     markSeen();
                 }
             } catch (err) {
-                console.error("Error loading chat:", err);
+                logger.error("Error loading chat:", err);
             } finally {
                 setLoading(false);
             }
