@@ -1,4 +1,5 @@
 import { useTheme } from "@/context/ThemeContext";
+import { logger } from "@/lib/logger";
 import { api } from "@/lib/api";
 import socket, { connectSocket } from "@/lib/socket";
 import { LinearGradient } from "expo-linear-gradient";
@@ -45,7 +46,7 @@ export default function GroupChatWindow({ activeGroup, onBack }) {
                 const res = await api.get(`/groups/${groupId}/messages`);
                 setMessages(res.data || []);
             } catch (err) {
-                console.error("Error loading group messages:", err);
+                logger.error("Error loading group messages:", err);
             } finally {
                 setLoading(false);
             }

@@ -1,4 +1,5 @@
 import { useTabScreenBottomPadding } from "@/hooks/useSafeSpacing";
+import { logger } from "@/lib/logger";
 import { Alert } from "@/lib/alert";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
@@ -90,7 +91,7 @@ export default function GroupChatList({ onSelect, query = "", activeOnly = false
                     if (items.length) setLoading(false);
                 }
             } catch (err) {
-                console.error("Error loading cached groups:", err);
+                logger.error("Error loading cached groups:", err);
             }
         };
         const load = async () => {
@@ -99,7 +100,7 @@ export default function GroupChatList({ onSelect, query = "", activeOnly = false
                 setGroups(res.data || []);
                 await AsyncStorage.setItem("groups_cache_v1", JSON.stringify(res.data || []));
             } catch (err) {
-                console.error("Error loading groups:", err);
+                logger.error("Error loading groups:", err);
             } finally {
                 setLoading(false);
             }

@@ -1,4 +1,5 @@
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
+import { logger } from "@/lib/logger";
 import { Alert } from "@/lib/alert";
 import { SCREEN_GUTTER } from "@/constants/layout";
 import { surfaceStyle } from "@/constants/design";
@@ -120,7 +121,7 @@ export default function GroupDetailPage() {
             hasGroupRef.current = true;
             setLoadError(null);
         } catch (e) {
-            console.error(
+            logger.error(
                 "Failed to load group details:",
                 groupId,
                 e?.response?.status,
@@ -137,7 +138,7 @@ export default function GroupDetailPage() {
             const res = await api.get(`/expenses/${groupId}`);
             setExpenses(res.data);
         } catch {
-            console.error("Failed to fetch expenses");
+            logger.error("Failed to fetch expenses");
         } finally {
             setExpensesLoaded(true);
         }
@@ -148,7 +149,7 @@ export default function GroupDetailPage() {
             const res = await api.get(`/balances/${groupId}`);
             setBalances(res.data);
         } catch {
-            console.error("Failed to fetch balances");
+            logger.error("Failed to fetch balances");
             setBalances((b) => b ?? { balances: [], suggestions: [] });
         }
     };

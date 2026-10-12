@@ -1,4 +1,5 @@
 import { Block, PillButton, SectionLabel, useDesign } from "@/components/ui/Design";
+import { logger } from "@/lib/logger";
 import { RowListSkeleton } from "@/components/ui/Skeleton";
 import { api } from "@/lib/api";
 import { PlusCircle } from "lucide-react-native";
@@ -27,7 +28,7 @@ export default function NotepadSection({ groupId }) {
             const res = await api.get(`/notepads/${groupId}`);
             setNotepads(res.data || []);
         } catch (e) {
-            console.error("Failed to load notepads");
+            logger.error("Failed to load notepads");
         } finally {
             setLoading(false);
         }
@@ -45,7 +46,7 @@ export default function NotepadSection({ groupId }) {
             setNotepads((prev) => [...prev, res.data]);
             setIsModalOpen(false);
         } catch (e) {
-            console.error("Failed to create notepad");
+            logger.error("Failed to create notepad");
         } finally {
             setCreating(false);
         }
@@ -58,12 +59,12 @@ export default function NotepadSection({ groupId }) {
                 prev.map((np) => (np._id === notepadId ? res.data : np))
             );
         } catch (e) {
-            console.error("Failed to add step");
+            logger.error("Failed to add step");
         }
     };
 
     const handleDeleteStep = async () => {
-        console.log("Delete step feature is coming soon!");
+        logger.log("Delete step feature is coming soon!");
     };
 
     if (loading) {
