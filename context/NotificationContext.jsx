@@ -1,4 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
+import { logger } from "@/lib/logger";
 import { api } from "@/lib/api";
 import socket, { connectSocket } from "@/lib/socket";
 import * as Notifications from "expo-notifications";
@@ -37,7 +38,7 @@ export function NotificationProvider({ children }) {
             setHasUnread(list.some((n) => !n.isRead));
         } catch (err) {
             // Non-critical — header just shows no badge.
-            console.log("Failed to load notifications:", err?.message);
+            logger.log("Failed to load notifications:", err?.message);
         }
     }, []);
 
@@ -107,7 +108,7 @@ export function NotificationProvider({ children }) {
         try {
             await api.put("/notifications/mark-read", {});
         } catch (err) {
-            console.log("Failed to mark all read:", err?.message);
+            logger.log("Failed to mark all read:", err?.message);
         }
     }, []);
 
@@ -121,7 +122,7 @@ export function NotificationProvider({ children }) {
         try {
             await api.put(`/notifications/${id}/read`, {});
         } catch (err) {
-            console.log("Failed to mark read:", err?.message);
+            logger.log("Failed to mark read:", err?.message);
         }
     }, []);
 

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '@/lib/logger';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { Colors } from '../constants/theme';
@@ -25,7 +26,7 @@ export const ThemeProvider = ({ children }) => {
                 // Old accent / premium palettes no longer exist.
                 await AsyncStorage.multiRemove(LEGACY_KEYS);
             } catch (error) {
-                console.log('Error loading theme:', error);
+                logger.log('Error loading theme:', error);
             }
         })();
     }, []);
@@ -42,7 +43,7 @@ export const ThemeProvider = ({ children }) => {
         try {
             await AsyncStorage.setItem('user-theme', next);
         } catch (error) {
-            console.log('Error saving theme:', error);
+            logger.log('Error saving theme:', error);
         }
     };
 

@@ -1,4 +1,5 @@
 import { useTabScreenBottomPadding } from "@/hooks/useSafeSpacing";
+import { logger } from "@/lib/logger";
 import { Alert } from "@/lib/alert";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
@@ -92,7 +93,7 @@ export default function ChatList({ onSelect, query = "", unreadOnly = false }) {
                     if (items.length) setLoading(false);
                 }
             } catch (err) {
-                console.error("Error loading cached chat data:", err);
+                logger.error("Error loading cached chat data:", err);
             }
         };
         const load = async () => {
@@ -102,7 +103,7 @@ export default function ChatList({ onSelect, query = "", unreadOnly = false }) {
                 setFriends(items.sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)));
                 await AsyncStorage.setItem("chat_contacts_cache_v1", JSON.stringify(items));
             } catch (err) {
-                console.error("Error loading users:", err);
+                logger.error("Error loading users:", err);
             } finally {
                 setLoading(false);
             }

@@ -1,4 +1,5 @@
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
+import { logger } from "@/lib/logger";
 import { SCREEN_GUTTER } from "@/constants/layout";
 import { Skeleton, SkeletonCircle } from "@/components/ui/Skeleton";
 import { PillButton, PillInput, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
@@ -68,7 +69,7 @@ export default function ProfileEditScreen() {
                 setProfile(res.data || {});
                 await AsyncStorage.setItem("profile_cache_v1", JSON.stringify(res.data || {}));
             } catch (err) {
-                console.log("Profile fetch error", err);
+                logger.log("Profile fetch error", err);
             } finally {
                 setLoading(false);
             }

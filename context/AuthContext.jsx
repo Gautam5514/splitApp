@@ -1,5 +1,6 @@
 // context/AuthContext.jsx
 import { setAuthToken } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { auth } from "@/lib/firebaseClient";
 import { unregisterStoredPushToken } from "@/lib/pushNotifications";
 import * as SecureStore from "expo-secure-store";
@@ -22,7 +23,7 @@ export function AuthProvider({ children }) {
         await SecureStore.setItemAsync(key, value);
       }
     } catch (e) {
-      console.error("Error setting storage item", e);
+      logger.error("Error setting storage item", e);
     }
   };
 
@@ -34,7 +35,7 @@ export function AuthProvider({ children }) {
         await SecureStore.deleteItemAsync(key);
       }
     } catch (e) {
-      console.error("Error deleting storage item", e);
+      logger.error("Error deleting storage item", e);
     }
   };
 
@@ -46,7 +47,7 @@ export function AuthProvider({ children }) {
         return await SecureStore.getItemAsync(key);
       }
     } catch (e) {
-      console.error("Error getting storage item", e);
+      logger.error("Error getting storage item", e);
       return null;
     }
   };
@@ -86,7 +87,7 @@ export function AuthProvider({ children }) {
           const idToken = await user.getIdToken();
           await updateAuthToken(idToken);
         } catch (error) {
-          console.error("Error getting ID token:", error);
+          logger.error("Error getting ID token:", error);
           await updateAuthToken(null);
         }
       } else {
@@ -104,7 +105,7 @@ export function AuthProvider({ children }) {
       await signOut(auth); // Properly sign out from Firebase
       // The listener will handle the state update (user becomes null)
     } catch (error) {
-      console.error("Logout failed:", error);
+      logger.error("Logout failed:", error);
       // Fallback manual cleanup
       await updateAuthToken(null);
     }
