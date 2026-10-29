@@ -8,6 +8,7 @@ import { HomeSkeleton, Skeleton, SkeletonCircle } from "@/components/ui/Skeleton
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
+import { useRealtime } from "@/lib/useRealtime";
 import { Alert } from "@/lib/alert";
 import { auth } from "@/lib/firebaseClient";
 import { getGroupIcon } from "@/lib/groupIcons";
@@ -266,6 +267,10 @@ export default function Dashboard() {
 
     const refresh = async () => {
         try {
+            // analytics powers "Spent this month"; refresh it too, but never block on it
+            api.get("/users/analytics")
+                .then((r) => { setAnalytics(r.data); AsyncStorage.setItem("analytics_cache_v1", JSON.stringify(r.data)); })
+                .catch(() => {});
             const [groupsRes, meRes] = await Promise.all([api.get("/groups"), api.get("/users/me")]);
             const allGroups = groupsRes.data || [];
             setGroups(allGroups);
@@ -278,6 +283,10 @@ export default function Dashboard() {
             // ignore
         }
     };
+
+    // Live update: a change in any of my groups (new expense, settlement, member
+    // change) refreshes the totals and group list without pulling to refresh.
+    useRealtime({ event: "dashboardUpdate", enabled: !authLoading && !!token, onChange: () => { refresh(); fetchQuickSplits(); } });
 
     // A group made in the create-group wizard should show up when we come back.
     useFocusEffect(useCallback(() => { if (token) { refresh(); fetchQuickSplits(); } }, [token])); // eslint-disable-line react-hooks/exhaustive-deps
