@@ -3,6 +3,7 @@ import PendingInvitesList from "@/components/invites/PendingInvitesList";
 import { Alert } from "@/lib/alert";
 import { GroupListSkeleton } from "@/components/ui/Skeleton";
 import { Block, PillButton, PillInput, RoundButton } from "@/components/ui/Design";
+import AutopilotButton from "@/components/autopilot/AutopilotButton";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
@@ -216,9 +217,12 @@ export default function TripsPage() {
                             Find owned and shared trips without digging through groups.
                         </Text>
                     </View>
-                    <RoundButton onPress={() => router.push("/create-group")} label="Create a new group">
-                        <Plus size={20} color={colors.text} strokeWidth={2.4} />
-                    </RoundButton>
+                    <View style={styles.headerActions}>
+                        <AutopilotButton size={46} />
+                        <RoundButton onPress={() => router.push("/create-group")} label="Create a new group">
+                            <Plus size={20} color={colors.text} strokeWidth={2.4} />
+                        </RoundButton>
+                    </View>
                 </View>
 
                 {/* Group invites waiting for my yes / no */}
@@ -596,6 +600,7 @@ const getStyles = (colors) => StyleSheet.create({
         paddingHorizontal: SCREEN_GUTTER,
         paddingTop: 8,
     },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
     headerText: {
         flex: 1,
         minWidth: 0,

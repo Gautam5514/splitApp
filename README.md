@@ -6,7 +6,7 @@
 
 ### Travel more. Worry less. Split effortlessly.
 
-**SplitEase** is a premium, AI powered group expense manager for trips, roommates, and everyday hangouts — smart splitting, receipt scanning, real-time group chat, one-tap UPI settlement, and a rewards club, all in one app.
+**SplitEase** is a premium group expense manager for trips, roommates and everyday hangouts: exact splitting, an AI agent that does the admin for you, receipt scanning, real-time group chat, one-tap UPI settlement and a rewards club, all in one app.
 
 [![Get it on Google Play](https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png)](https://play.google.com/store/apps/details?id=com.kunal.splitapp)
 
@@ -39,6 +39,8 @@
 
 - [Why SplitEase](#why-splitease)
 - [Features](#features)
+- [Autopilot](#autopilot)
+- [Smart tips](#smart-tips)
 - [How it works](#how-it-works)
 - [Elite Club rewards](#elite-club-rewards)
 - [Tech stack](#tech-stack)
@@ -63,19 +65,46 @@ Trusted by 10,000+ travelers and live on Google Play as **Splitease**.
 
 | | Feature | Description |
 |---|---|---|
+| 🧭 | **Autopilot** | Type "rent 20000" or "dinner 3000 Rahul ko chhod ke". Autopilot drafts a plan you review and approve, then does the work. Open it from the 3D icon in the top bar. |
 | 🧮 | **Smart Split Engine** | Split equally, by percentage, by shares, or by exact amount — the math is handled the moment an expense is added. |
 | 📸 | **AI Receipt Scanner** | Snap a photo of any bill. OCR reads every line item, itemizes it, and drops it straight into the group. |
 | 💬 | **Settle Chat** | Group chat and the expense ledger live in the same thread — every bill and payment is part of the conversation, in real time via Socket.IO. |
 | ⚡ | **Minimum-Transfer Optimizer** | Nets every balance in the group and routes the fewest possible payments to settle everyone up. |
 | 💳 | **One-Tap UPI Settle** | Clear debts instantly with UPI. Each settlement is logged and balances reset to zero automatically. |
 | 🏆 | **Elite Club Rewards** | Earn coins by referring friends; unlock badges, custom themes, priority support, and early access to new features. |
-| 🔔 | **Push Notifications** | Real-time alerts for new expenses, chat messages, settlements, and group invites via Firebase Cloud Messaging. |
+| 🔔 | **Push Notifications** | Real-time alerts for new expenses, chat messages, settlements and group invites, plus a few well-timed tips (new month, weekend, trip season). |
 | 📱 | **Home Screen Widget** | An Android widget shows live balances — what you owe and what's owed to you — without opening the app. |
 | 🎨 | **Custom Themes** | Light, dark, and unlockable premium themes, switchable anywhere in the app. |
 | 🔐 | **Secure Auth** | Email/password and Google Sign-In, backed by Firebase Auth and Expo Secure Store. |
 | 🔗 | **Instant Invites** | Every group ships with a shareable link and invite code — friends join in one tap. |
 | 🤖 | **AI Chat Assistant** | Ask questions about a group's spending and get instant, conversational answers. |
 | 📊 | **Expense Breakdown & Charts** | Visual breakdowns of who spent what, and where the group's money actually went. |
+
+## Autopilot
+
+An approval-gated AI agent, built into the app as a full screen (not a floating bubble). Tap the
+glossy blue **3D Autopilot icon** in the header of Home, Trips or any group; inside a group it
+opens already working in that group.
+
+| You say | Autopilot does |
+|---|---|
+| "rent 21000" | Plans Rent ₹21,000, paid by you, split with the group's usual split |
+| "make it 24000" · "Ravi ko hata do" · "Priya bhi" | Updates the waiting plan instantly |
+| "pizza 600 with Aman and Priya" | Splits between just the three of you |
+| "Create group Goa Trip with Aman, budget 40000" | New trip group, invites, budget |
+| "who owes whom?" · "my total balance" · "show food expenses" | Answers right away, changes nothing |
+| "delete last expense" | Shows a red "can't be undone" card; only the red button deletes |
+
+- **You stay in control.** Nothing changes until you approve. The button shows the amount ("Approve ₹1,200"). Typing "haan" or "yes" approves small plans; deletes and amounts over ₹50,000 need the button.
+- **Edit, don't retype.** "Edit amount or people" opens a sheet to change the title, amount and who shares it.
+- **Remembers the conversation.** Leave and come back; the chat and any waiting plan are still there.
+- **Same brain as the web.** It uses the shared `/agent` API, so web and app always behave the same.
+
+## Smart tips
+
+A tip on the 1st of the month, one weekend nudge and a few trip ideas in November and December arrive
+as normal notifications (bell + push), at most one a day and never at night. Tapping one opens
+Autopilot with a ready draft, such as "Create group Puri Trip, budget 30000".
 
 ## How it works
 
@@ -126,10 +155,11 @@ splitApp/
 │   ├── groups/            # Group detail, balances, expenses
 │   ├── info/               # Help, pricing, privacy, terms, contact, etc.
 │   ├── join/[inviteCode]/  # Deep-link group invites
-│   └── ai-chat.jsx, rewards.jsx, settings.jsx ...
+│   └── autopilot.jsx, ai-chat.jsx, rewards.jsx, settings.jsx ...
 ├── components/            # Reusable UI: modals, charts, headers, chat UI
+│   └── autopilot/          # Autopilot plan cards, approval, edit + group sheets, header button
 ├── context/                # Auth, Notification, and Theme providers
-├── lib/                    # API client, Firebase, sockets, push notifications
+├── lib/                    # API client, Firebase, sockets, push, Autopilot rules (autopilot.js)
 ├── widgets/                 # Android home-screen balance widget
 ├── hooks/                    # Shared React hooks
 ├── constants/                  # App-wide constants
@@ -184,7 +214,7 @@ npm run web                # run in the browser
 | `npm run ios` | Build & run the iOS dev client |
 | `npm run web` | Run the web build |
 | `npm run lint` | Lint the project with `expo lint` |
-| `npm test` | Run the Jest test suite |
+| `npm test` | Run the Jest test suite (Autopilot flows are in `components/__tests__/autopilotScreen.test.js`) |
 | `npm run build:apk` | Production APK build via EAS |
 | `npm run build:production` | Production build for iOS & Android via EAS |
 | `npm run submit:android` | Submit the latest Android build to Google Play |
@@ -204,7 +234,10 @@ The Android app is live today on **[Google Play](https://play.google.com/store/a
 
 ## Roadmap
 
-- [ ] iOS App Store release
+- [x] Autopilot AI agent with approval, editing and Hinglish understanding
+- [x] Smart tips in the bell and push, opening Autopilot with a draft
+- [ ] iOS App Store release (and iOS push)
+- [ ] Separate "Promotions" notification channel so tips can be muted on their own
 - [ ] Multi-currency support for international trips
 - [ ] Recurring/subscription expense splitting
 - [ ] Export settlements as PDF statements

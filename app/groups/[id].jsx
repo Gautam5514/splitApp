@@ -14,6 +14,7 @@ import { formatMoney, groupTypeMeta } from "@/lib/groupPresets";
 import NotepadSection from "@/components/Notepad/NotepadSection";
 import OcrViewModal from "@/components/OcrViewModal";
 import { Block, IconCircle, ListRow, PillButton, RoundButton, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
+import AutopilotButton from "@/components/autopilot/AutopilotButton";
 import { useAuth } from "@/context/AuthContext";
 import GroupAvatarSheet from "@/components/group/GroupAvatarSheet";
 import { api } from "@/lib/api";
@@ -485,20 +486,23 @@ export default function GroupDetailPage() {
                 title={group.name}
                 subtitle={headerSubtitle}
                 right={
-                    isCreator ? (
-                        <RoundButton label="Group actions" onPress={() => setShowMenu(true)}>
-                            <MoreVertical size={18} color={colors.text} />
-                        </RoundButton>
-                    ) : group.isCompleted ? (
-                        <View style={styles.completedBadge}>
-                            <CheckCircle2 size={12} color="#10B981" />
-                            <Text style={styles.completedBadgeText}>Completed</Text>
-                        </View>
-                    ) : (
-                        <RoundButton label="Leave group" onPress={handleLeave}>
-                            <LogOut size={18} color={colors.error} />
-                        </RoundButton>
-                    )
+                    <View style={styles.headerActions}>
+                        {!group.isCompleted && <AutopilotButton size={46} groupId={group._id} />}
+                        {isCreator ? (
+                            <RoundButton label="Group actions" onPress={() => setShowMenu(true)}>
+                                <MoreVertical size={18} color={colors.text} />
+                            </RoundButton>
+                        ) : group.isCompleted ? (
+                            <View style={styles.completedBadge}>
+                                <CheckCircle2 size={12} color="#10B981" />
+                                <Text style={styles.completedBadgeText}>Completed</Text>
+                            </View>
+                        ) : (
+                            <RoundButton label="Leave group" onPress={handleLeave}>
+                                <LogOut size={18} color={colors.error} />
+                            </RoundButton>
+                        )}
+                    </View>
                 }
             />
 
@@ -1030,6 +1034,7 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
     errorButton: {
         alignSelf: "stretch",
     },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
     completedBadge: {
         flexDirection: "row",
         alignItems: "center",

@@ -1,5 +1,6 @@
 import { DonutRing, SpendingAreaChart } from "@/components/Charts";
 import CoinBadge from "@/components/CoinBadge";
+import AutopilotButton from "@/components/autopilot/AutopilotButton";
 import InviteModal from "@/components/InviteModal";
 import { Loader } from "@/components/Loader";
 import NotificationBell from "@/components/NotificationBell";
@@ -357,6 +358,7 @@ export default function Dashboard() {
                         </View>
                     </View>
                     <View style={styles.appBarActions}>
+                        <AutopilotButton size={40} />
                         <CoinBadge />
                         <NotificationBell iconColor={colors.textSecondary} />
                     </View>
@@ -766,7 +768,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     avatarText: { color: colors.onPrimary, fontSize: 18, fontWeight: "700" },
     greeting: { fontSize: 12, color: colors.textSecondary, fontWeight: "500" },
     userNameTop: { fontSize: 18, fontWeight: "800", color: colors.text },
-    appBarActions: { flexDirection: "row", alignItems: "center", gap: 4 },
+    appBarActions: { flexDirection: "row", alignItems: "center", gap: 6 },
 
     scrollView: { flex: 1 },
     scrollContent: { paddingTop: 6, paddingBottom: 110 },

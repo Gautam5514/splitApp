@@ -59,6 +59,7 @@ export default function RootLayout() {
           <Stack.Screen name="rewards" />
           <Stack.Screen name="create-group" />
           <Stack.Screen name="quick-split" />
+          <Stack.Screen name="autopilot" />
           <Stack.Screen name="invites" />
           <Stack.Screen name="privacy" />
           <Stack.Screen name="info/terms" />

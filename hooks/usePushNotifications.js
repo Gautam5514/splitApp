@@ -1,4 +1,6 @@
 import { syncPushTokenWithBackend } from "@/lib/pushNotifications";
+import { api } from "@/lib/api";
+import { openAutopilot } from "@/lib/autopilotNav";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
@@ -35,6 +37,12 @@ const routeFromNotification = (response) => {
       params: { id: String(data.groupId), name: String(data.groupName || "") },
     });
     return;
+  }
+
+  // Tips: record the open, then go straight to Autopilot with the suggested draft.
+  if (data.type === "promo") {
+    if (data.notificationId) api.post("/engagement/opened", { notificationId: String(data.notificationId) }).catch(() => {});
+    if (typeof data.prompt === "string") { openAutopilot({ prompt: data.prompt, groupId: data.groupId }); return; }
   }
 
   const link = data.link;

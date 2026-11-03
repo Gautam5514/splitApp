@@ -8,9 +8,12 @@ import {
     BellOff,
     CheckCheck,
     ReceiptText,
+    Sparkles,
     UsersRound,
     X,
 } from "lucide-react-native";
+import { api } from "@/lib/api";
+import { openAutopilotFromLink } from "@/lib/autopilotNav";
 import { useCallback, useState } from "react";
 import {
     FlatList,
@@ -36,6 +39,8 @@ const timeAgo = (value) => {
 };
 
 const metaFor = (type, colors) => {
+    // Tips look like any other notification, with their own small icon.
+    if (type === "promo") return { Icon: Sparkles, color: "#8B5CF6" };
     if (type === "expense") {
         return { Icon: ReceiptText, color: colors.success };
     }
@@ -56,6 +61,11 @@ export default function NotificationBell({ iconColor }) {
         (n) => {
             setOpen(false);
             markOneAsRead(n._id);
+            if (n.type === "promo") {
+                // Records the open; a tip opens Autopilot with its suggested draft.
+                api.post("/engagement/opened", { notificationId: n._id }).catch(() => {});
+                if (openAutopilotFromLink(n.cta?.link)) return;
+            }
             const link = n.link || "";
             if (link.startsWith("/groups/")) {
                 router.push(link);
@@ -79,7 +89,7 @@ export default function NotificationBell({ iconColor }) {
                             <Icon size={18} color={color} />
                         </IconCircle>
                     }
-                    title={n.message}
+                    title={n.title ? `${n.title} ${n.message}` : n.message}
                     numberOfLines={2}
                     subtitle={timeAgo(n.createdAt)}
                     trailing={!n.isRead ? <View style={styles.unreadDot} /> : null}
