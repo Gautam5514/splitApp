@@ -116,9 +116,9 @@
             {
               "name": "SplitEaseBalance",
               "label": "SplitEase",
-              "description": "Your balance or a custom amount on the home screen — pick a design in the app.",
-              "minWidth": "250dp",
-              "minHeight": "110dp",
+              "description": "Your balance, who owes whom, this month's spend and quick actions. Pick a design in the app.",
+              "minWidth": "180dp",
+              "minHeight": "40dp",
               "targetCellWidth": 4,
               "targetCellHeight": 2,
               "resizeMode": "horizontal|vertical",

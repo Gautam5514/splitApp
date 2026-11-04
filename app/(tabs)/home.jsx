@@ -244,7 +244,15 @@ export default function Dashboard() {
 
     const computeOwe = async (allGroups, uid) => {
         if (!uid) return { totalOwed: 0, totalOwe: 0 };
-        // One request for all groups; fall back to per-group on an older backend.
+        // One request for all groups (the widget payload carries totals plus who owes whom,
+        // so the home-screen widget is repainted from the same numbers); fall back to the
+        // plain summary, then to per-group requests on an older backend.
+        try {
+            const { data } = await api.get("/balances/widget");
+            if (data && Array.isArray(data.people)) return { ...data, totalOwed: data.totalOwed || 0, totalOwe: data.totalOwe || 0 };
+        } catch {
+            // fall through
+        }
         try {
             const { data } = await api.get("/balances/summary");
             if (data) return { totalOwed: data.totalOwed || 0, totalOwe: data.totalOwe || 0 };
