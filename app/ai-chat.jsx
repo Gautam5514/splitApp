@@ -43,16 +43,46 @@ const PROVIDERS = [
     { value: "openai", label: "ChatGPT" },
 ];
 
-// Ready-made prompts. Each has a SHORT, meaningful label shown on the chip,
-// and a longer, well-structured `prompt` that gets auto-typed into the input
-// box when tapped (so the user can review / edit before send).
-const SUGGESTIONS = [
-    { label: "Who owes me", prompt: "Who owes me money right now? List each person with the amount and group, biggest first." },
-    { label: "What I owe", prompt: "Show everything I owe, grouped by person, with the total at the end." },
-    { label: "Total spend", prompt: "Show my total spend from January to December, broken down by month with amounts." },
-    { label: "This month", prompt: "How much did I spend this month? Break it down by category with amounts." },
-    { label: "Recent trip", prompt: "Summarise my most recent trip: total cost, my share, who paid the most and who still owes." },
-    { label: "Settle up", prompt: "What is the fewest number of payments to settle all my groups? List who pays whom." },
+/*
+ * Ready-made questions, by topic. Tapping one asks it straight away (the answer is
+ * what people want, not a form to edit); long-pressing a quick chip drops the text
+ * into the box to edit first. "All" shows the first question of every topic.
+ */
+const CATEGORIES = [
+    { key: "all", label: "All" },
+    { key: "balances", label: "Balances" },
+    { key: "spending", label: "Spending" },
+    { key: "trips", label: "Trips" },
+    { key: "general", label: "General" },
+    { key: "history", label: "History" },
+];
+const READY = {
+    balances: [
+        { title: "Who owes me", prompt: "Who owes me money right now? List each person with the amount and group, biggest first." },
+        { title: "What I owe", prompt: "Show everything I owe, grouped by person, with the total at the end." },
+        { title: "Fewest payments", prompt: "What is the fewest number of payments to settle all my groups? List who pays whom." },
+    ],
+    spending: [
+        { title: "This month", prompt: "How much did I spend this month? Break it down by category with amounts." },
+        { title: "Month by month", prompt: "Show my total spend from January to December, broken down by month with amounts." },
+        { title: "Biggest expenses", prompt: "What are my five biggest expenses this year, with the group and date for each?" },
+    ],
+    trips: [
+        { title: "Recent trip", prompt: "Summarise my most recent trip: total cost, my share, who paid the most and who still owes." },
+        { title: "Trip budget", prompt: "For my latest trip, compare what we spent with the budget and say how much is left per person." },
+    ],
+    general: [
+        { title: "Monthly summary", prompt: "Give me a short summary of my shared expenses this month: totals, top groups and anything unusual." },
+        { title: "Spend less", prompt: "Looking at my recent spending, suggest three practical ways I could spend less next month." },
+    ],
+};
+const TOPICS = Object.keys(READY);
+// The four most-asked questions, one tap from the top of the screen.
+const QUICK = [
+    { label: "Who owes me", prompt: READY.balances[0].prompt },
+    { label: "Settle up", prompt: READY.balances[2].prompt },
+    { label: "This month", prompt: READY.spending[0].prompt },
+    { label: "Recent trip", prompt: READY.trips[0].prompt },
 ];
 
 const CATEGORY_ICON = { balances: Scale, spending: ChartPie, trips: Plane, general: HandCoins };
@@ -84,6 +114,7 @@ export default function AiChatScreen() {
     const [loading, setLoading] = useState(false);
     const [provider, setProvider] = useState("gemini");
     const [history, setHistory] = useState([]);
+    const [tab, setTab] = useState("all");
     const [logoPressed, setLogoPressed] = useState(false);
     const listRef = useRef(null);
 
@@ -174,6 +205,9 @@ export default function AiChatScreen() {
 
     const canSend = !!prompt.trim() && !loading;
     const inChat = messages.length > 0;
+    // Cards for the chosen topic; "All" takes the first question of every topic.
+    const cards = tab === "history" ? [] : tab === "all" ? TOPICS.map((k) => ({ ...READY[k][0], category: k })) : (READY[tab] || []).map((c) => ({ ...c, category: tab }));
+    const shownHistory = tab === "all" || tab === "history" ? history : history.filter((h) => h.category === tab);
 
     return (
         <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -221,27 +255,67 @@ export default function AiChatScreen() {
                             <FloatingLogo size={200} />
                         </View>
 
-                        {/* Compact suggestion chips — tapping fills the input box
-                            with the longer question so you can review / edit it
-                            before sending. Two-line wrapped grid to save space. */}
-                        <View style={styles.suggestGrid}>
-                            {SUGGESTIONS.map((item) => {
-                                const Icon = CATEGORY_ICON[categorize(item.prompt)] || Scale;
+                        {/* The four most-asked questions: one tap asks, long-press edits first */}
+                        <View style={styles.quickRow}>
+                            {QUICK.map((item) => (
+                                <TouchableOpacity
+                                    key={item.label}
+                                    style={styles.quickChip}
+                                    onPress={() => askAI(item.prompt)}
+                                    onLongPress={() => setPrompt(item.prompt)}
+                                    activeOpacity={0.8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={item.label}
+                                    accessibilityHint="Asks straight away. Hold to edit the question first."
+                                >
+                                    <Text style={styles.quickChipText}>{item.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* Topics: filter the ready questions and the history */}
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} keyboardShouldPersistTaps="handled">
+                            {CATEGORIES.map((c) => {
+                                const active = tab === c.key;
                                 return (
                                     <TouchableOpacity
-                                        key={item.label}
-                                        style={styles.suggestChip}
-                                        onPress={() => setPrompt(item.prompt)}
+                                        key={c.key}
+                                        onPress={() => setTab(c.key)}
+                                        style={[styles.tab, active && styles.tabActive]}
                                         activeOpacity={0.8}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Fill: ${item.prompt}`}
+                                        accessibilityRole="tab"
+                                        accessibilityState={{ selected: active }}
                                     >
-                                        <Icon size={15} color={colors.text} strokeWidth={1.9} />
-                                        <Text style={styles.suggestChipText}>{item.label}</Text>
+                                        <Text style={[styles.tabText, active && styles.tabTextActive]}>{c.label}</Text>
                                     </TouchableOpacity>
                                 );
                             })}
-                        </View>
+                        </ScrollView>
+
+                        {cards.length > 0 && (
+                            <View style={styles.cardGrid}>
+                                {cards.map((item) => {
+                                    const Icon = CATEGORY_ICON[item.category] || Scale;
+                                    return (
+                                        <TouchableOpacity
+                                            key={item.prompt}
+                                            style={styles.card}
+                                            onPress={() => askAI(item.prompt)}
+                                            onLongPress={() => setPrompt(item.prompt)}
+                                            activeOpacity={0.85}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`Ask: ${item.prompt}`}
+                                        >
+                                            <View style={styles.cardIcon}>
+                                                <Icon size={16} color={colors.text} strokeWidth={1.9} />
+                                            </View>
+                                            <Text style={styles.cardTitle}>{item.title}</Text>
+                                            <Text style={styles.cardText} numberOfLines={3}>{item.prompt}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        )}
 
                         {/* History (this phone only) */}
                         <View style={styles.historyHead}>
@@ -252,9 +326,9 @@ export default function AiChatScreen() {
                                 </TouchableOpacity>
                             )}
                         </View>
-                        {history.length ? (
+                        {shownHistory.length ? (
                             <View style={styles.historyList}>
-                                {history.map((h) => (
+                                {shownHistory.map((h) => (
                                     <TouchableOpacity
                                         key={h.id}
                                         style={styles.historyRow}
@@ -272,7 +346,7 @@ export default function AiChatScreen() {
                             </View>
                         ) : (
                             <Text style={styles.historyEmpty}>
-                                Your recent questions will show up here. They stay on this phone.
+                                {history.length ? "Nothing asked under this topic yet." : "Your recent questions will show up here. They stay on this phone."}
                             </Text>
                         )}
                     </ScrollView>
@@ -457,17 +531,27 @@ const getStyles = (colors, t, isDark) => {
         hero: { alignItems: "center", justifyContent: "center", paddingTop: 20, paddingBottom: 28 },
         providerCompact: { alignSelf: "center" },
 
-        // Compact suggestion chips — wrapped into two lines to save space.
-        suggestGrid: {
-            marginTop: 6, flexDirection: "row", flexWrap: "wrap", gap: 8,
-            alignItems: "center", justifyContent: "center",
-        },
-        suggestChip: {
-            flexDirection: "row", alignItems: "center", gap: 7,
+        // Quick questions (one row), topic tabs, and ready-question cards (two columns).
+        quickRow: { marginTop: 2, flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" },
+        quickChip: {
             paddingVertical: 9, paddingHorizontal: 14, borderRadius: 20,
             backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
         },
-        suggestChipText: { fontSize: 13.5, fontWeight: "600", color: colors.text },
+        quickChipText: { fontSize: 13.5, fontWeight: "600", color: colors.text },
+        tabs: { flexDirection: "row", gap: 6, paddingVertical: 4, marginTop: 22 },
+        tab: { paddingVertical: 7, paddingHorizontal: 13, borderRadius: 16, backgroundColor: "transparent" },
+        tabActive: { backgroundColor: t.ink },
+        tabText: { fontSize: 13.5, fontWeight: "600", color: colors.textSecondary },
+        tabTextActive: { color: t.onInk },
+        cardGrid: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10 },
+        card: {
+            width: "48%", flexGrow: 1, padding: 14, borderRadius: 20,
+            backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
+            ...shadow,
+        },
+        cardIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: t.surfaceAlt, marginBottom: 10 },
+        cardTitle: { fontSize: 14.5, fontWeight: "700", color: colors.text },
+        cardText: { fontSize: 12.5, lineHeight: 17, color: colors.textSecondary, marginTop: 3 },
 
         historyHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 26, marginBottom: 4 },
         historyTitle: { fontSize: 22, fontWeight: "700", color: colors.text, letterSpacing: -0.3 },
