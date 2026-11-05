@@ -7,6 +7,7 @@ import AutopilotButton from "@/components/autopilot/AutopilotButton";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
+import { useRealtime } from "@/lib/useRealtime";
 import { router } from "expo-router";
 import {
     CalendarDays,
@@ -41,7 +42,7 @@ export default function TripsPage() {
     const { colors } = useTheme();
     const tabBottomPadding = useTabScreenBottomPadding();
     const [groups, setGroups] = useState([]);
-    const [view, setView] = useState("all");
+    const [view, setView] = useState("active");
     const [userId, setUserId] = useState(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
@@ -55,7 +56,7 @@ export default function TripsPage() {
 
     const styles = useMemo(() => getStyles(colors), [colors]);
 
-    const fetchMeAndGroups = useCallback(async () => {
+    const fetchMeAndGroups = useCallback(async ({ silent = false } = {}) => {
         try {
             // Skeleton only on the very first load - a refresh (after completing,
             // accepting an invite...) must not wipe the list back to placeholders.
@@ -72,7 +73,8 @@ export default function TripsPage() {
             setGroups(allGroups);
         } catch (err) {
             console.warn("Failed to fetch groups:", err?.message || err);
-            Alert.alert("Error", "Failed to load groups. Please try again.");
+            // A background live refresh must not pop an error over the screen.
+            if (!silent) Alert.alert("Error", "Failed to load groups. Please try again.");
         } finally {
             loadedOnceRef.current = true;
             setLoading(false);
@@ -84,6 +86,14 @@ export default function TripsPage() {
         if (!token) return;
         fetchMeAndGroups();
     }, [token, fetchMeAndGroups]);
+
+    // Live: any change in any of my groups (new expense, member, completed,
+    // created/deleted - from web or another phone) refreshes the list.
+    useRealtime({
+        event: "dashboardUpdate",
+        enabled: !!token,
+        onChange: () => fetchMeAndGroups({ silent: true }),
+    });
 
     const getEntityId = (entity) => {
         if (!entity) return null;
@@ -165,8 +175,10 @@ export default function TripsPage() {
         .filter((group) => {
             if (view === "owned" && !group.isCreator) return false;
             if (view === "shared" && !group.isJoined) return false;
+            // "All" shows active + completed; "Done" only completed; every other
+            // view (Active - the default, Mine, Shared) hides completed groups.
             if (view === "completed" && !isGroupCompleted(group)) return false;
-            if (view !== "completed" && isGroupCompleted(group)) return false;
+            if (view !== "completed" && view !== "all" && isGroupCompleted(group)) return false;
             if (!normalizedSearch) return true;
 
             const memberText = group.members
@@ -186,21 +198,24 @@ export default function TripsPage() {
     const completedGroups = useMemo(() => groups.filter((g) => isGroupCompleted(g)), [groups]);
 
     const filterTabs = useMemo(() => [
-        { key: "all", label: "All", count: activeGroups.length },
+        { key: "active", label: "Active", count: activeGroups.length },
+        { key: "all", label: "All", count: groups.length },
         { key: "owned", label: "Mine", count: activeGroups.filter(isCreatedByCurrentUser).length },
         { key: "shared", label: "Shared", count: activeGroups.filter((g) => isCurrentUserMember(g) && !isCreatedByCurrentUser(g)).length },
         { key: "completed", label: "Done", count: completedGroups.length },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [activeGroups, completedGroups, userId]);
+    ], [groups, activeGroups, completedGroups, userId]);
 
     const emptyTitleForView = {
-        all: "No active trips found",
+        active: "No active trips found",
+        all: "No trips found",
         owned: "No trips created by you",
         shared: "No shared trips found",
         completed: "No completed trips yet",
     };
 
     const emptyTextForView = {
+        active: "Create a trip or join one from an invite to see it here.",
         all: "Create a trip or join one from an invite to see it here.",
         owned: "Trips you create will appear here with an owned badge.",
         shared: "Trips where another user added you will appear here.",
@@ -292,7 +307,12 @@ export default function TripsPage() {
                                     onPress={() => { setView(tab.key); setFilterOpen(false); }}
                                     activeOpacity={0.75}
                                 >
-                                    <Text style={[styles.filterPillText, selected && styles.filterPillTextActive]}>
+                                    <Text
+                                        style={[styles.filterPillText, selected && styles.filterPillTextActive]}
+                                        numberOfLines={1}
+                                        adjustsFontSizeToFit
+                                        minimumFontScale={0.8}
+                                    >
                                         {tab.label} {tab.count}
                                     </Text>
                                 </TouchableOpacity>
@@ -633,13 +653,15 @@ const getStyles = (colors) => StyleSheet.create({
     filterMenu: {
         flexDirection: "row",
         alignItems: "center",
-        flexWrap: "wrap",
-        gap: 8,
+        // All five filters (Active, All, Mine, Shared, Done) share one row.
+        gap: 6,
         marginHorizontal: SCREEN_GUTTER,
         marginBottom: 12,
     },
     filterPill: {
-        paddingHorizontal: 16,
+        flex: 1,
+        alignItems: "center",
+        paddingHorizontal: 4,
         paddingVertical: 9,
         borderRadius: 999,
         backgroundColor: colors.card,
@@ -651,7 +673,8 @@ const getStyles = (colors) => StyleSheet.create({
         borderColor: colors.primary,
     },
     filterPillText: {
-        fontSize: 13.5,
+        fontSize: 12.5,
+        textAlign: "center",
         fontWeight: "600",
         color: colors.textSecondary,
     },

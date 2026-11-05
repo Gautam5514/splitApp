@@ -558,6 +558,23 @@ function PendingSettlementRow({ pending, meId, money, colors, styles, onConfirm,
     const initiatorPaid = String(pending.initiatedBy._id) === String(pending.fromUserId._id);
     const counterpartyName = initiatorPaid ? pending.toUserId.name : pending.fromUserId.name;
     const methodLabel = pending.method === "online" ? "via online transfer" : "in cash";
+    const isParty =
+        meId != null &&
+        (String(pending.fromUserId._id) === String(meId) ||
+            String(pending.toUserId._id) === String(meId));
+
+    // Only the payer and the payee are involved in this settlement. Everyone
+    // else in the group must NOT be asked to confirm it - just show its status.
+    if (!isParty) {
+        return (
+            <View style={styles.pendingWaitRow}>
+                <Clock size={12} color={colors.warning} />
+                <Text style={styles.pendingWaitText}>
+                    Awaiting confirmation between {pending.fromUserId.name} and {pending.toUserId.name}
+                </Text>
+            </View>
+        );
+    }
 
     if (isInitiator) {
         return (

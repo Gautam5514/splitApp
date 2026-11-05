@@ -2,7 +2,7 @@ import { useTabScreenBottomPadding } from "@/hooks/useSafeSpacing";
 import { Alert } from "@/lib/alert";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
-import socket, { connectSocket } from "@/lib/socket";
+import socket, { connectSocket, onResync } from "@/lib/socket";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CheckCircle2, Circle, MessageCircle, Trash2, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
@@ -111,10 +111,10 @@ export default function ChatList({ onSelect, query = "", unreadOnly = false }) {
         load();
         connectSocket();
 
-        socket.on("userStatus", ({ userId, online: isOnline }) => {
+        const onStatus = ({ userId, online: isOnline }) => {
             setOnline((prev) => (isOnline ? [...new Set([...prev, userId])] : prev.filter((id) => id !== userId)));
-        });
-        socket.on("newMessage", (msg) => {
+        };
+        const onNewMessage = (msg) => {
             setFriends((prev) =>
                 prev
                     .map((u) =>
@@ -124,10 +124,16 @@ export default function ChatList({ onSelect, query = "", unreadOnly = false }) {
                     )
                     .sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0))
             );
-        });
+        };
+        socket.on("userStatus", onStatus);
+        socket.on("newMessage", onNewMessage);
+        // Reconnected / back from background: refresh previews + unread counts.
+        const stopResync = onResync(() => load());
+        // Remove only OUR listeners - an open chat window has its own.
         return () => {
-            socket.off("userStatus");
-            socket.off("newMessage");
+            stopResync();
+            socket.off("userStatus", onStatus);
+            socket.off("newMessage", onNewMessage);
         };
     }, []);
 

@@ -2,6 +2,7 @@ import { Block, PillButton, RoundButton, SectionLabel, useDesign } from "@/compo
 import { Text } from "@/components/ui/Typography";
 import { GroupListSkeleton } from "@/components/ui/Skeleton";
 import { api } from "@/lib/api";
+import { useRealtime } from "@/lib/useRealtime";
 import { Alert } from "@/lib/alert";
 import { getGroupIcon } from "@/lib/groupIcons";
 import { groupTypeMeta } from "@/lib/groupPresets";
@@ -23,6 +24,8 @@ export default function PendingInvitesList({ compact = false, onChanged, refresh
 
     const load = useCallback(() => api.get("/invites").then((r) => setInvites(r.data || [])).catch(() => setInvites([])), []);
     useEffect(() => { load(); }, [load, refreshKey]);
+    // A new invite (or one cancelled by the sender) shows up live.
+    useRealtime({ event: "dashboardUpdate", onChange: () => load() });
 
     const accept = async (inv) => {
         try {

@@ -32,7 +32,7 @@ function useShimmer() {
     useEffect(() => {
         v.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }), -1, true);
         return () => cancelAnimation(v);
-    }, []);
+    }, [v]);
     return v;
 }
 

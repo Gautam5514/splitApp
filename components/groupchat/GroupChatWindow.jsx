@@ -1,6 +1,6 @@
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
-import socket, { connectSocket } from "@/lib/socket";
+import socket, { connectSocket, joinGroupRoom, leaveGroupRoom, onResync } from "@/lib/socket";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronLeft } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -56,7 +56,7 @@ export default function GroupChatWindow({ activeGroup, onBack }) {
     useEffect(() => {
         if (!groupId) return;
         connectSocket();
-        socket.emit("joinGroup", groupId);
+        joinGroupRoom(groupId);
 
         const onNew = (msg) => {
             if (String(msg.groupId) !== groupId) return;
@@ -72,10 +72,19 @@ export default function GroupChatWindow({ activeGroup, onBack }) {
             );
         };
 
+        // Back from the background / reconnected: pull anything sent meanwhile.
+        const stopResync = onResync(() => {
+            api.get(`/groups/${groupId}/messages`)
+                .then((res) => setMessages(res.data || []))
+                .catch(() => {});
+        });
+
         socket.on("newGroupMessage", onNew);
         socket.on("groupMessagesSeen", onSeen);
         return () => {
-            socket.emit("leaveGroup", groupId);
+            stopResync();
+            // Ref-counted: the group screen underneath keeps its live updates.
+            leaveGroupRoom(groupId);
             socket.off("newGroupMessage", onNew);
             socket.off("groupMessagesSeen", onSeen);
         };

@@ -5,6 +5,7 @@ import { Block, PillButton, useDesign } from "@/components/ui/Design";
 import { api } from "@/lib/api";
 import { WEB_URL } from "@/lib/config";
 import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import {
     AlertCircle,
@@ -41,7 +42,7 @@ const STATUS_META = {
     cancelled: { label: "Cancelled", Icon: AlertCircle, color: "#9CA3AF" },
 };
 
-export default function ReferralSection() {
+export default function ReferralSection({ refreshKey = 0 }) {
     const { colors } = useTheme();
     const { t } = useDesign();
     const styles = getStyles(colors, t);
@@ -56,12 +57,13 @@ export default function ReferralSection() {
         : "";
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        // refreshKey > 0 = pull-to-refresh: reload quietly without the spinner.
+        fetchData(refreshKey > 0);
+    }, [refreshKey]);
 
-    const fetchData = async () => {
+    const fetchData = async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             setError(false);
             const res = await api.get("/referrals/me");
             setData(res.data);
@@ -76,6 +78,7 @@ export default function ReferralSection() {
         if (!data?.referralCode) return;
         try {
             await Clipboard.setStringAsync(data.referralCode);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
             setCopied(true);
             setTimeout(() => setCopied(false), 1800);
         } catch {
@@ -129,6 +132,7 @@ export default function ReferralSection() {
         successfulReferrals,
         invited = [],
         eliteClub,
+        rewards,
     } = data;
 
     const tierBasis = eliteClub?.basisCoins ?? coins;
@@ -222,7 +226,9 @@ export default function ReferralSection() {
                     />
                 </View>
                 <Text style={styles.shareNote}>
-                    The moment a friend joins with your link, you both earn coins instantly.
+                    {rewards
+                        ? `The moment a friend joins with your link, you earn ${rewards.referrerCoins} coins and they get ${rewards.referredCoins}.`
+                        : "The moment a friend joins with your link, you both earn coins instantly."}
                 </Text>
             </Block>
 
@@ -245,6 +251,12 @@ export default function ReferralSection() {
                             </Text>
                         )}
                     </View>
+
+                    {eliteClub.nextTier && eliteClub.friendsToNext > 0 && (
+                        <Text style={styles.eliteToNext}>
+                            Invite {eliteClub.friendsToNext} more {eliteClub.friendsToNext === 1 ? "friend" : "friends"} to reach {eliteClub.nextTier.name}.
+                        </Text>
+                    )}
 
                     {eliteClub.nextTier && (
                         <View style={styles.progressTrack}>

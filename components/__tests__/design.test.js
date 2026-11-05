@@ -1,7 +1,7 @@
 import React from "react";
 import TR from "react-test-renderer";
 jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn() } }));
-jest.mock("@react-native-async-storage/async-storage", () => ({ getItem: jest.fn(async () => null), setItem: jest.fn() }));
+jest.mock("@react-native-async-storage/async-storage", () => ({ getItem: jest.fn(async () => null), setItem: jest.fn(), removeItem: jest.fn(), multiRemove: jest.fn(async () => {}) }));
 const { ThemeProvider } = require("@/context/ThemeContext");
 const D = require("../ui/Design");
 

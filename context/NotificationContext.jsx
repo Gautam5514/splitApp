@@ -1,6 +1,6 @@
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
-import socket, { connectSocket } from "@/lib/socket";
+import socket, { connectSocket, disconnectSocket, onResync } from "@/lib/socket";
 import * as Notifications from "expo-notifications";
 import {
     createContext,
@@ -83,7 +83,11 @@ export function NotificationProvider({ children }) {
 
     // Real-time socket notifications (shares the app-wide socket instance).
     useEffect(() => {
-        if (!token) return;
+        if (!token) {
+            // Logged out: stop receiving the previous account's live updates.
+            disconnectSocket();
+            return;
+        }
         connectSocket();
 
         const onNotification = (notif) => {
@@ -97,8 +101,13 @@ export function NotificationProvider({ children }) {
         };
 
         socket.on("notification", onNotification);
-        return () => socket.off("notification", onNotification);
-    }, [token]);
+        // Reconnected: refetch so the bell includes anything missed while offline.
+        const stopResync = onResync(() => fetchNotifications());
+        return () => {
+            socket.off("notification", onNotification);
+            stopResync();
+        };
+    }, [token, fetchNotifications]);
 
     const markAllAsRead = useCallback(async () => {
         // Optimistic clear.

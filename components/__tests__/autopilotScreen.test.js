@@ -5,7 +5,7 @@ const mockGet = jest.fn();
 jest.mock("@/lib/api", () => ({ api: { get: (...a) => mockGet(...a), post: (...a) => mockPost(...a), defaults: { headers: { common: {} } } } }));
 jest.mock("@/lib/firebaseClient", () => ({ auth: { currentUser: null } }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn(), replace: jest.fn() }, useLocalSearchParams: () => ({}) }));
-jest.mock("@react-native-async-storage/async-storage", () => ({ getItem: jest.fn(async () => null), setItem: jest.fn(async () => {}), removeItem: jest.fn(async () => {}) }));
+jest.mock("@react-native-async-storage/async-storage", () => ({ getItem: jest.fn(async () => null), setItem: jest.fn(async () => {}), removeItem: jest.fn(async () => {}), multiRemove: jest.fn(async () => {}) }));
 jest.mock("react-native-safe-area-context", () => { const { View } = require("react-native"); return { SafeAreaView: View, SafeAreaProvider: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }; });
 
 const React = require("react");

@@ -1,6 +1,6 @@
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
-import socket, { connectSocket } from "@/lib/socket";
+import socket, { connectSocket, onResync } from "@/lib/socket";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -105,12 +105,22 @@ export default function ChatWindow({ activeFriend, onBack }) {
             }
         };
 
+        // Reconnected / back from background: the server forgot our room, and
+        // messages may have arrived meanwhile - rejoin and refetch.
+        const stopResync = onResync(() => {
+            socket.emit("joinConversation", conversationId);
+            api.get(`/chat/messages/${conversationId}`)
+                .then((res) => { setMessages(res.data || []); markSeen(); })
+                .catch(() => {});
+        });
+
         socket.on("newMessage", onNewMessage);
         socket.on("messagesSeen", onSeen);
         socket.on("messagesDelivered", onDelivered);
         socket.on("userStatus", onStatus);
         // Remove only OUR listeners — the chat list keeps its own "newMessage" handler.
         return () => {
+            stopResync();
             socket.off("newMessage", onNewMessage);
             socket.off("messagesSeen", onSeen);
             socket.off("messagesDelivered", onDelivered);

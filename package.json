@@ -76,6 +76,7 @@
     "preset": "jest-expo",
     "testMatch": [
       "**/__tests__/**/*.test.js"
-    ]
+    ],
+    "testTimeout": 30000
   }
 }

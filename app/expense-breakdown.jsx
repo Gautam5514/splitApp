@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Text } from "@/components/ui/Typography";
 import { api } from "@/lib/api";
+import { useRealtime } from "@/lib/useRealtime";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const CACHE_KEY = "analytics_cache_v1";
@@ -55,6 +56,9 @@ export default function ExpenseBreakdown() {
     loadCachedAnalytics();
     fetchAnalytics();
   }, []);
+
+  // Live: a new expense in any of my groups updates the breakdown.
+  useRealtime({ event: "dashboardUpdate", onChange: () => fetchAnalytics() });
 
   if (!analytics && loading) {
     return (

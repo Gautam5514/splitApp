@@ -3,6 +3,7 @@ import { Alert } from "@/lib/alert";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { connectSocket } from "@/lib/socket";
+import { useRealtime } from "@/lib/useRealtime";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { CheckCircle2, Circle, Trash2, Users, X } from "lucide-react-native";
@@ -108,6 +109,19 @@ export default function GroupChatList({ onSelect, query = "", activeOnly = false
         load();
         connectSocket();
     }, []);
+
+    // A group created, deleted or joined anywhere (web, another phone) shows up live.
+    useRealtime({
+        event: "dashboardUpdate",
+        onChange: () => {
+            api.get("/groups")
+                .then((res) => {
+                    setGroups(res.data || []);
+                    AsyncStorage.setItem("groups_cache_v1", JSON.stringify(res.data || [])).catch(() => {});
+                })
+                .catch(() => {});
+        },
+    });
 
     const q = query.trim().toLowerCase();
     const isDone = (g) => g?.isCompleted === true || g?.isCompleted === "true";
