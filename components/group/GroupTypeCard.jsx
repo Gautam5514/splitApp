@@ -1,19 +1,22 @@
 import { Block, useDesign } from "@/components/ui/Design";
 import { Text } from "@/components/ui/Typography";
+import { flatFill } from "@/constants/design";
 import { getGroupIcon } from "@/lib/groupIcons";
 import { formatMoney, groupTypeMeta } from "@/lib/groupPresets";
 import { LinearGradient } from "expo-linear-gradient";
-import { CalendarDays, Receipt, Settings2, TrendingUp, TriangleAlert, UserRoundCheck } from "lucide-react-native";
+import { CalendarDays, Pencil, Receipt, Settings2, TrendingUp, TriangleAlert, UserRoundCheck } from "lucide-react-native";
 import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
 const fmtDay = (d) => new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
 /**
- * Card under the group header that changes with the type (same as web):
+ * Card under the group header. First line answers "where do I stand?" (my
+ * balance in this group); below it the stats change with the type:
  * Trip = budget meter, day X of Y, per-day, who pays next · Roommates = this
- * month, next bill · Business = receipts missing · Other = total.
+ * month · Business = receipts missing · Other = total.
+ * `myNet`: my balance (+ = I get, - = I owe), `undefined` while it loads.
  */
-export default function GroupTypeCard({ group, summary, isCreator, onOpenSettings, onEditLook }) {
+export default function GroupTypeCard({ group, summary, isCreator, onOpenSettings, onEditLook, myNet }) {
     const { colors, t } = useDesign();
     const styles = getStyles(colors, t);
     const type = group.groupType || "general";
@@ -21,8 +24,12 @@ export default function GroupTypeCard({ group, summary, isCreator, onOpenSetting
     const currency = summary?.currency || group.settings?.currency || "INR";
     const money = (v) => formatMoney(v, currency);
     const GroupIcon = getGroupIcon(group.icon) || meta.Icon;
-
-    if (!summary) return <Block style={{ minHeight: 120 }}><View /></Block>;
+    const owes = typeof myNet === "number" && myNet < -0.01;
+    const gets = typeof myNet === "number" && myNet > 0.01;
+    const standing = myNet === undefined ? "…"
+        : owes ? `You owe ${money(Math.round(-myNet))}`
+        : gets ? `You get ${money(Math.round(myNet))}`
+        : "All settled up";
 
     const stat = (label, value, hint) => (
         <View style={{ flex: 1 }}>
@@ -38,8 +45,10 @@ export default function GroupTypeCard({ group, summary, isCreator, onOpenSetting
         </TouchableOpacity>
     );
 
-    let body;
-    if (type === "trip") {
+    let body = null;
+    if (!summary) {
+        body = null; // stats still loading (or failed): the balance line stands alone
+    } else if (type === "trip") {
         const tr = summary.trip || {};
         const budget = tr.budget;
         const pct = budget ? Math.min(100, Math.round((summary.total / budget) * 100)) : 0;
@@ -119,23 +128,38 @@ export default function GroupTypeCard({ group, summary, isCreator, onOpenSetting
     }
 
     return (
-        <Block>
-            <View style={[styles.spread, { marginBottom: 12 }]}>
-                <TouchableOpacity style={[styles.inline, { gap: 10 }]} onPress={isCreator ? onEditLook : undefined}
+        <Block style={styles.card}>
+            <View style={[styles.inline, { gap: 12 }, body ? { marginBottom: 14 } : null]}>
+                <TouchableOpacity onPress={isCreator ? onEditLook : undefined}
                     disabled={!isCreator} accessibilityLabel={isCreator ? "Change group photo or icon" : undefined}>
-                    {group.photo?.url ? (
-                        <Image source={{ uri: group.photo.url }} style={styles.avatar} />
-                    ) : (
-                        <LinearGradient colors={meta.accent} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
-                            <GroupIcon size={18} color="#fff" strokeWidth={2.2} />
-                        </LinearGradient>
-                    )}
-                    <View style={styles.inline}>
-                        <meta.Icon size={13} color={colors.primary} />
-                        <Text style={styles.typeLabel}>{meta.label}</Text>
+                    <View>
+                        {group.photo?.url ? (
+                            <Image source={{ uri: group.photo.url }} style={styles.avatar} />
+                        ) : (
+                            <LinearGradient colors={meta.accent} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
+                                <GroupIcon size={21} color="#fff" strokeWidth={2.2} />
+                            </LinearGradient>
+                        )}
+                        {/* Small pencil = "you can change this" (creator only) */}
+                        {isCreator ? (
+                            <View style={styles.editBadge}>
+                                <Pencil size={9} color={t.onInk} strokeWidth={2.6} />
+                            </View>
+                        ) : null}
                     </View>
                 </TouchableOpacity>
-                {isCreator ? link(Settings2, "Settings", onOpenSettings, colors.textSecondary) : null}
+                {/* The one thing everyone opens a group for */}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.statLabel}>Your balance</Text>
+                    <Text
+                        style={[styles.standing, owes && { color: colors.error }, gets && { color: colors.success }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                    >
+                        {standing}
+                    </Text>
+                </View>
             </View>
             {body}
         </Block>
@@ -143,8 +167,15 @@ export default function GroupTypeCard({ group, summary, isCreator, onOpenSetting
 }
 
 const getStyles = (colors, t) => StyleSheet.create({
-    avatar: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-    typeLabel: { fontSize: 13, fontWeight: "700", color: colors.text },
+    card: flatFill(t), // borderless tinted fill, no shadow
+    standing: { fontSize: 24, fontWeight: "800", color: colors.text, letterSpacing: -0.4, marginTop: 2 },
+    avatar: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+    editBadge: {
+        position: "absolute", right: -2, bottom: -2,
+        width: 18, height: 18, borderRadius: 9,
+        alignItems: "center", justifyContent: "center",
+        backgroundColor: t.ink, borderWidth: 2, borderColor: colors.background,
+    },
     spread: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
     row: { flexDirection: "row", gap: 12 },
     inline: { flexDirection: "row", alignItems: "center", gap: 5 },
@@ -156,6 +187,6 @@ const getStyles = (colors, t) => StyleSheet.create({
     hint: { fontSize: 12, color: colors.textSecondary },
     hintStrong: { fontSize: 12, fontWeight: "700", color: colors.text },
     linkText: { fontSize: 12.5, fontWeight: "700", color: colors.primary, flexShrink: 1 },
-    track: { height: 8, borderRadius: 4, backgroundColor: t.surfaceAlt, overflow: "hidden", marginTop: 8 },
+    track: { height: 8, borderRadius: 4, backgroundColor: t.outline, overflow: "hidden", marginTop: 8 },
     fill: { height: "100%", borderRadius: 4 },
 });

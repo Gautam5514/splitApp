@@ -1,7 +1,8 @@
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
 import { useAuth } from "@/context/AuthContext";
 import { Loader } from "@/components/Loader";
-import { RoundButton } from "@/components/ui/Design";
+import { IconCircle, ListRow, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
+import { TYPE } from "@/constants/design";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
@@ -9,10 +10,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
 import {
-    ChevronLeft,
     ChevronRight,
     FileText,
-    Gift,
     KeyRound,
     LogOut,
     Mail,
@@ -23,7 +22,6 @@ import {
     Tag,
     Trash,
     Trash2,
-    UserCog,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Alert } from "@/lib/alert";
@@ -32,18 +30,16 @@ import {
     ScrollView,
     StyleSheet,
     Switch,
-    TouchableOpacity,
     View,
 } from "react-native";
 import { Text } from "@/components/ui/Typography";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { SCREEN_GUTTER } from "@/constants/layout";
 
 export default function SettingsScreen() {
     const { logout } = useAuth();
-    const { theme, toggleTheme, colors } = useTheme();
+    const { toggleTheme, setAccent } = useTheme();
+    const { colors, isDark, t } = useDesign();
     const bottomSpacing = useBottomSpacing(24);
-    const isDark = theme === "dark";
     const styles = getStyles(colors, isDark);
 
     const [email, setEmail] = useState("");
@@ -109,6 +105,7 @@ export default function SettingsScreen() {
         try {
             setDeleting(true);
             await api.delete("/profile/account");
+            await setAccent(null);
             await logout();
             router.replace("/auth/login");
         } catch (e) {
@@ -120,147 +117,118 @@ export default function SettingsScreen() {
     const doLogout = () => {
         Alert.alert("Log out", "Are you sure you want to log out?", [
             { text: "Cancel", style: "cancel" },
-            { text: "Log out", style: "destructive", onPress: async () => { await logout(); router.replace("/auth/login"); } },
+            {
+                text: "Log out",
+                style: "destructive",
+                onPress: async () => {
+                    await logout();
+                    // Don't leave this person's cached profile for the next login.
+                    await Promise.all([
+                        AsyncStorage.removeItem("profile_cache_v1"),
+                        AsyncStorage.removeItem("me_cache_v1"),
+                        setAccent(null), // an unlocked theme belongs to the account, not the phone
+                    ]).catch(() => {});
+                    router.replace("/auth/login");
+                },
+            },
         ]);
+    };
+
+    // One row style for the whole screen: icon circle, label, value / chevron.
+    const row = (Icon, title, onPress, extra = {}) => {
+        const tint = extra.danger ? colors.error : colors.text;
+        return (
+            <ListRow
+                style={[styles.row, extra.danger && styles.dangerRow]}
+                onPress={onPress}
+                title={title}
+                subtitle={extra.subtitle}
+                danger={extra.danger}
+                leading={
+                    <IconCircle size={40} tint={extra.danger ? dangerTint(isDark, 0.16) : t.fillStrong}>
+                        <Icon size={18} color={tint} strokeWidth={2} />
+                    </IconCircle>
+                }
+                trailing={
+                    extra.trailing ?? (
+                        <View style={styles.rowTrailing}>
+                            {extra.value ? <Text style={styles.rowValue} numberOfLines={1}>{extra.value}</Text> : null}
+                            {onPress ? <ChevronRight size={20} color={colors.textSecondary} /> : null}
+                        </View>
+                    )
+                }
+            />
+        );
     };
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            {/* Header: back button + centered title */}
-            <View style={styles.header}>
-                <RoundButton onPress={() => router.back()} label="Back">
-                    <ChevronLeft size={22} color={colors.text} strokeWidth={2.3} />
-                </RoundButton>
-                <Text style={styles.pageTitle}>Settings</Text>
-                <View style={styles.headerSpacer} />
-            </View>
+            <ScreenHeader flat back title="Settings" />
 
-            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
-                {/* Account */}
-                <Section label="Account" styles={styles}>
-                    <Row styles={styles} colors={colors} Icon={Mail} label="Email" value={email || "—"} hideChevron />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={UserCog} label="Edit profile" onPress={() => router.push("/profile-edit")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={KeyRound} label="Change password" onPress={changePassword} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={ShieldCheck} label="Groups & privacy" onPress={() => router.push("/privacy")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={Mail} label="Group invites" onPress={() => router.push("/invites")} />
-                </Section>
+            <ScrollView contentContainerStyle={{ paddingBottom: bottomSpacing }} showsVerticalScrollIndicator={false}>
+                <SectionLabel line>Account</SectionLabel>
+                <View style={styles.group}>
+                    {row(Mail, "Email", undefined, { value: email || "—" })}
+                    {row(KeyRound, "Change password", changePassword, { subtitle: "We'll email you a reset link" })}
+                </View>
 
-                {/* Appearance */}
-                <Section label="Appearance" styles={styles}>
-                    <Row
-                        styles={styles} colors={colors} Icon={Moon} label="Dark mode" hideChevron
-                        trailing={
+                <SectionLabel line>App</SectionLabel>
+                <View style={styles.group}>
+                    {row(Moon, "Dark mode", undefined, {
+                        trailing: (
                             <Switch
                                 value={isDark}
                                 onValueChange={toggleTheme}
-                                trackColor={{ false: "#E5E7EB", true: colors.primary }}
-                                thumbColor="#fff"
-                                ios_backgroundColor="#E5E7EB"
+                                accessibilityLabel="Dark mode"
+                                trackColor={{ false: t.fillStrong, true: isDark ? "#3A3A3C" : t.ink }}
+                                thumbColor="#FFFFFF"
+                                ios_backgroundColor={t.fillStrong}
                             />
-                        }
-                    />
-                    {Platform.OS === "android" && (
-                        <>
-                            <Divider styles={styles} />
-                            <Row styles={styles} colors={colors} Icon={PanelsTopLeft} label="Home screen widget" value="Design" onPress={() => router.push("/widget-customize")} />
-                        </>
-                    )}
-                </Section>
+                        ),
+                    })}
+                    {Platform.OS === "android" &&
+                        row(PanelsTopLeft, "Home screen widget", () => router.push("/widget-customize"))}
+                    {row(Trash, "Clear cached data", clearCache, { subtitle: "Your account is not affected" })}
+                </View>
 
-                {/* Discover */}
-                <Section label="Discover" styles={styles}>
-                    <Row styles={styles} colors={colors} Icon={Sparkles} label="How it works" onPress={() => router.push("/info/how-it-works")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={Gift} label="What we offer" onPress={() => router.push("/info/what-we-offer")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={Tag} label="Pricing" onPress={() => router.push("/info/pricing")} />
-                </Section>
+                <SectionLabel line>About</SectionLabel>
+                <View style={styles.group}>
+                    {row(Sparkles, "How it works", () => router.push("/info/how-it-works"))}
+                    {row(Tag, "Pricing", () => router.push("/info/pricing"))}
+                    {row(FileText, "Terms of Service", () => router.push("/info/terms"))}
+                    {row(ShieldCheck, "Privacy Policy", () => router.push("/info/privacy"))}
+                </View>
 
-                {/* About & Legal */}
-                <Section label="About & Legal" styles={styles}>
-                    <Row styles={styles} colors={colors} Icon={FileText} label="Terms of Service" onPress={() => router.push("/info/terms")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={ShieldCheck} label="Privacy Policy" onPress={() => router.push("/info/privacy")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={FileText} label="Help Center" onPress={() => router.push("/info/help-center")} />
-                </Section>
+                <SectionLabel line>Leave</SectionLabel>
+                <View style={styles.group}>
+                    {row(LogOut, "Log out", doLogout)}
+                    {row(Trash2, "Delete account", deleting ? undefined : confirmDelete, {
+                        danger: true,
+                        subtitle: "Permanently erases your account and data",
+                        trailing: deleting ? <Loader size={16} color={colors.error} /> : undefined,
+                    })}
+                </View>
 
-                {/* Storage */}
-                <Section label="Storage" styles={styles}>
-                    <Row styles={styles} colors={colors} Icon={Trash} label="Clear cached data" onPress={clearCache} />
-                </Section>
-
-                {/* Danger zone */}
-                <Section label="Danger Zone" styles={styles}>
-                    <Row
-                        styles={styles} colors={colors} Icon={Trash2} label="Delete account permanently" danger
-                        onPress={deleting ? undefined : confirmDelete}
-                        trailing={deleting ? <Loader size={16} color={colors.error} /> : undefined}
-                        hideChevron={deleting}
-                    />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={LogOut} label="Log Out" danger hideChevron onPress={doLogout} />
-                </Section>
-
-                <Text style={styles.version}>SplitEase · v1.0.0</Text>
+                <Text style={styles.version}>SplitEase v10.0.3</Text>
             </ScrollView>
         </SafeAreaView>
     );
 }
 
-/* ── Reusable pieces (match profile page) ───────────────────────────────── */
-function Section({ label, children, styles }) {
-    return (
-        <View>
-            <Text style={styles.sectionLabel}>{label}</Text>
-            <View style={styles.card}>{children}</View>
-        </View>
-    );
-}
-
-function Row({ styles, colors, Icon, label, value, trailing, onPress, danger, hideChevron }) {
-    const tint = danger ? colors.error : colors.text;
-    const Wrapper = onPress ? TouchableOpacity : View;
-    return (
-        <Wrapper style={styles.row} activeOpacity={0.7} onPress={onPress} accessibilityRole={onPress ? "button" : undefined} accessibilityLabel={label}>
-            <View style={styles.rowIcon}><Icon size={21} color={tint} strokeWidth={1.9} /></View>
-            <Text style={[styles.rowLabel, { color: tint }]} numberOfLines={1}>{label}</Text>
-            {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
-            {trailing ?? (!hideChevron && <ChevronRight size={20} color={colors.textSecondary} />)}
-        </Wrapper>
-    );
-}
-
-function Divider({ styles }) {
-    return <View style={styles.divider} />;
-}
+// Faded red: enough to say "careful", not a solid alarm block.
+const dangerTint = (isDark, alpha) => (isDark ? `rgba(248,113,113,${alpha})` : `rgba(239,68,68,${alpha})`);
 
 const getStyles = (colors, isDark) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: "row", alignItems: "center", paddingHorizontal: SCREEN_GUTTER, paddingTop: 4, paddingBottom: 12 },
-    pageTitle: { flex: 1, fontSize: 20, fontWeight: "800", color: colors.text, textAlign: "center", letterSpacing: -0.3 },
-    headerSpacer: { width: 44, height: 44 },
-
-    scroll: { paddingHorizontal: SCREEN_GUTTER, paddingTop: 4, paddingBottom: 40 },
-
-    sectionLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: 10, marginLeft: 4 },
-    card: {
-        backgroundColor: colors.card, borderRadius: 22,
-        borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
-        paddingHorizontal: 16, marginBottom: 26,
-        shadowColor: "#0F172A", shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: isDark ? 0 : 0.05, shadowRadius: 16, elevation: isDark ? 0 : 2,
+    // Rows sit straight on the canvas under a lined heading (no cards) — same as Profile
+    group: { marginBottom: 10 },
+    row: { paddingVertical: 8 },
+    // Inset 12 + padding 8 keeps the icon lined up with the rows above (gutter 20).
+    dangerRow: {
+        marginHorizontal: 12, marginTop: 4, paddingHorizontal: 8, paddingVertical: 10,
+        borderRadius: 18, backgroundColor: dangerTint(isDark, 0.08),
     },
-
-    row: { flexDirection: "row", alignItems: "center", paddingVertical: 15 },
-    rowIcon: { width: 30, alignItems: "flex-start", justifyContent: "center" },
-    rowLabel: { flex: 1, fontSize: 16, fontWeight: "500", color: colors.text },
-    rowValue: { fontSize: 14, color: colors.textSecondary, marginRight: 8, maxWidth: 170 },
-    divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 30 },
-
-    version: { textAlign: "center", fontSize: 12, color: colors.textSecondary, marginTop: 6 },
+    rowTrailing: { flexDirection: "row", alignItems: "center", gap: 8, maxWidth: "55%" },
+    rowValue: { ...TYPE.secondary, color: colors.textSecondary, flexShrink: 1 },
+    version: { ...TYPE.meta, color: colors.textSecondary, textAlign: "center", marginTop: 12 },
 });

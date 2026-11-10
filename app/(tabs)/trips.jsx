@@ -1,33 +1,35 @@
 import InviteModal from "@/components/InviteModal";
 import PendingInvitesList from "@/components/invites/PendingInvitesList";
+import { normalizeInviteCode } from "@/lib/inviteCode";
 import { Alert } from "@/lib/alert";
 import { GroupListSkeleton } from "@/components/ui/Skeleton";
-import { Block, PillButton, PillInput, RoundButton } from "@/components/ui/Design";
+import BottomSheet from "@/components/ui/BottomSheet";
+import { Block, PillButton, PillInput, RoundButton, Segmented } from "@/components/ui/Design";
 import AutopilotButton from "@/components/autopilot/AutopilotButton";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { useRealtime } from "@/lib/useRealtime";
 import { router } from "expo-router";
+import { getGroupIcon } from "@/lib/groupIcons";
+import { formatMoney, groupTypeMeta } from "@/lib/groupPresets";
+import { LinearGradient } from "expo-linear-gradient";
 import {
-    CalendarDays,
-    CheckCircle,
-    ChevronsRight,
-    Crown,
-    Home,
+    CheckCircle2,
+    ChevronRight,
     KeyRound,
-    ListFilter,
-    Plane,
+    MoreHorizontal,
     Search,
     Plus,
+    ScanLine,
     Trash2,
-    UserPlus,
     Users,
     X
 } from "lucide-react-native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     FlatList,
+    Image,
     StyleSheet,
     TouchableOpacity,
     View,
@@ -52,9 +54,32 @@ export default function TripsPage() {
     const [inviteGroupId, setInviteGroupId] = useState(null);
     const [joinOpen, setJoinOpen] = useState(false);
     const [joinCode, setJoinCode] = useState("");
-    const [filterOpen, setFilterOpen] = useState(false);
+    const [menuGroup, setMenuGroup] = useState(null); // group whose "⋯" sheet is open
+    // groupId -> { net, currency }: my balance in each active group, shown on its row.
+    const [netByGroup, setNetByGroup] = useState({});
 
     const styles = useMemo(() => getStyles(colors), [colors]);
+
+    // "You owe / you get" per group. Reuses the per-group balances call the Home
+    // tab already falls back to; capped so a long list never fans out too far.
+    const loadNets = async (allGroups, uid) => {
+        if (!uid) return;
+        const active = allGroups.filter((g) => !isGroupCompleted(g)).slice(0, MAX_BALANCE_ROWS);
+        const results = await Promise.all(
+            active.map((g) => api.get(`/balances/${g._id}`).catch(() => null))
+        );
+        const next = {};
+        results.forEach((res, i) => {
+            const list = res?.data?.balances;
+            if (!Array.isArray(list)) return;
+            const mine = list.find((b) => String(b.userId) === String(uid));
+            next[active[i]._id] = {
+                net: Number(mine?.balance) || 0,
+                currency: active[i].settings?.currency || "INR",
+            };
+        });
+        setNetByGroup(next);
+    };
 
     const fetchMeAndGroups = useCallback(async ({ silent = false } = {}) => {
         try {
@@ -69,8 +94,9 @@ export default function TripsPage() {
             const id = meRes?.data?._id || meRes?.data?.id || null;
             setUserId(id);
 
-            const allGroups = groupsRes?.data || [];
+            const allGroups = Array.isArray(groupsRes?.data) ? groupsRes.data : [];
             setGroups(allGroups);
+            loadNets(allGroups, id); // not awaited: rows fill in when balances arrive
         } catch (err) {
             console.warn("Failed to fetch groups:", err?.message || err);
             // A background live refresh must not pop an error over the screen.
@@ -112,19 +138,34 @@ export default function TripsPage() {
     const isCurrentUserMember = (group) =>
         group?.members?.some((member) => isSameId(getEntityId(member), userId));
 
-    const markCompleted = useCallback(async (groupId) => {
-        try {
-            await api.put(`/groups/${groupId}/complete`, {});
-            fetchMeAndGroups();
-        } catch (_err) {
-            console.error("Failed to mark as completed");
-        }
+    const markCompleted = useCallback((groupId) => {
+        Alert.alert(
+            "Mark as completed?",
+            "This group will move to Completed. You can still open it any time.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Mark Completed",
+                    onPress: async () => {
+                        try {
+                            await api.put(`/groups/${groupId}/complete`, {});
+                            fetchMeAndGroups();
+                        } catch (err) {
+                            Alert.alert(
+                                "Error",
+                                err?.response?.data?.message || "Could not mark the group as completed. Please try again."
+                            );
+                        }
+                    },
+                },
+            ]
+        );
     }, [fetchMeAndGroups]);
 
     const deleteTrip = useCallback((groupId) => {
         Alert.alert(
-            "Delete trip?",
-            "This will delete the trip with its expenses, notes, and group messages.",
+            "Delete group?",
+            "This will delete the group with its expenses, notes, and group messages.",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -137,7 +178,7 @@ export default function TripsPage() {
                         } catch (err) {
                             Alert.alert(
                                 "Error",
-                                err?.response?.data?.message || "Could not delete trip. Please try again."
+                                err?.response?.data?.message || "Could not delete the group. Please try again."
                             );
                         }
                     },
@@ -146,6 +187,8 @@ export default function TripsPage() {
         );
     }, [fetchMeAndGroups]);
 
+
+    const openGroupMenu = useCallback((group) => setMenuGroup(group), []);
 
     const createGroup = async () => {
         if (!searchQuery.trim()) return;
@@ -197,29 +240,25 @@ export default function TripsPage() {
     const activeGroups = useMemo(() => groups.filter((g) => !isGroupCompleted(g)), [groups]);
     const completedGroups = useMemo(() => groups.filter((g) => isGroupCompleted(g)), [groups]);
 
-    const filterTabs = useMemo(() => [
-        { key: "active", label: "Active", count: activeGroups.length },
-        { key: "all", label: "All", count: groups.length },
-        { key: "owned", label: "Mine", count: activeGroups.filter(isCreatedByCurrentUser).length },
-        { key: "shared", label: "Shared", count: activeGroups.filter((g) => isCurrentUserMember(g) && !isCreatedByCurrentUser(g)).length },
-        { key: "completed", label: "Done", count: completedGroups.length },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [groups, activeGroups, completedGroups, userId]);
+    const viewTabs = [
+        { value: "active", label: `Active · ${activeGroups.length}` },
+        { value: "completed", label: `Completed · ${completedGroups.length}` },
+    ];
 
     const emptyTitleForView = {
-        active: "No active trips found",
-        all: "No trips found",
-        owned: "No trips created by you",
-        shared: "No shared trips found",
-        completed: "No completed trips yet",
+        active: "No active groups",
+        all: "No groups found",
+        owned: "No groups created by you",
+        shared: "No shared groups",
+        completed: "No completed groups yet",
     };
 
     const emptyTextForView = {
-        active: "Create a trip or join one from an invite to see it here.",
-        all: "Create a trip or join one from an invite to see it here.",
-        owned: "Trips you create will appear here with an owned badge.",
-        shared: "Trips where another user added you will appear here.",
-        completed: "Completed trips stay searchable here for later reference.",
+        active: "Create a group or join one with an invite code.",
+        all: "Create a group or join one with an invite code.",
+        owned: "Groups you create will show up here.",
+        shared: "Groups other people added you to will show up here.",
+        completed: "Groups you mark as completed are kept here.",
     };
 
     const listHeader = (
@@ -227,10 +266,7 @@ export default function TripsPage() {
                 {/* Header Section — big title + round "new" action */}
                 <View style={styles.header}>
                     <View style={styles.headerText}>
-                        <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>SplitEase</Text>
-                        <Text style={styles.subtitle}>
-                            Find owned and shared trips without digging through groups.
-                        </Text>
+                        <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>Groups</Text>
                     </View>
                     <View style={styles.headerActions}>
                         <AutopilotButton size={46} />
@@ -246,7 +282,7 @@ export default function TripsPage() {
                 {/* One line: search / name · invite-code · filter dropdown */}
                 <View style={styles.searchRow}>
                     <PillInput
-                        placeholder="Search or name a group…"
+                        placeholder="Search groups"
                         style={styles.searchPill}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
@@ -260,8 +296,8 @@ export default function TripsPage() {
                         ) : null}
                     />
 
-                    {searchQuery.length > 0 ? (
-                        // Typing a name → the row becomes "create this group".
+                    {normalizedSearch && !loading && decoratedGroups.length === 0 ? (
+                        // Nothing matches what was typed → offer to create it.
                         <PillButton
                             label={creating ? undefined : "Create"}
                             onPress={createGroup}
@@ -274,7 +310,7 @@ export default function TripsPage() {
                         <>
                             {/* Invite-code button — opens the code input below. */}
                             <RoundButton
-                                onPress={() => { setJoinOpen((v) => !v); setFilterOpen(false); }}
+                                onPress={() => setJoinOpen((v) => !v)}
                                 label="Have an invite code?"
                                 active={joinOpen}
                                 size={48}
@@ -282,50 +318,15 @@ export default function TripsPage() {
                                 <KeyRound size={19} color={joinOpen ? colors.onPrimary : colors.text} strokeWidth={2.1} />
                             </RoundButton>
 
-                            {/* Filter button — opens a full-width option list below. */}
-                            <RoundButton
-                                onPress={() => { setFilterOpen((v) => !v); setJoinOpen(false); }}
-                                label="Filter groups"
-                                active={filterOpen}
-                                size={48}
-                            >
-                                <ListFilter size={19} color={filterOpen ? colors.onPrimary : colors.text} strokeWidth={2.1} />
-                            </RoundButton>
                         </>
                     )}
                 </View>
-
-                {/* Filter options — simple pills in a line (not a boxed list). */}
-                {filterOpen && (
-                    <View style={styles.filterMenu}>
-                        {filterTabs.map((tab) => {
-                            const selected = view === tab.key;
-                            return (
-                                <TouchableOpacity
-                                    key={tab.key}
-                                    style={[styles.filterPill, selected && styles.filterPillActive]}
-                                    onPress={() => { setView(tab.key); setFilterOpen(false); }}
-                                    activeOpacity={0.75}
-                                >
-                                    <Text
-                                        style={[styles.filterPillText, selected && styles.filterPillTextActive]}
-                                        numberOfLines={1}
-                                        adjustsFontSizeToFit
-                                        minimumFontScale={0.8}
-                                    >
-                                        {tab.label} {tab.count}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                )}
 
                 {/* Invite-code input (revealed by the invite button) */}
                 {joinOpen && (
                     <View style={styles.joinCodeRow}>
                         <PillInput
-                            placeholder="6-character code, e.g. K7M2QX"
+                            placeholder="Code or invite link, e.g. K7M2QX"
                             style={styles.joinCodeInput}
                             value={joinCode}
                             onChangeText={setJoinCode}
@@ -335,18 +336,28 @@ export default function TripsPage() {
                         <PillButton
                             label="Join"
                             onPress={() => {
-                                // "k7m 2qx" -> "K7M2QX"; old long links pass through as typed.
-                                const raw = joinCode.trim();
-                                const compact = raw.replace(/[\s-]/g, "").toUpperCase();
-                                const code = /^[A-Z2-9]{6}$/.test(compact) ? compact : raw;
-                                if (!code) return;
+                                // A code ("k7m 2qx"), a pasted invite link or the whole
+                                // shared message all work; nonsense goes to the full screen.
+                                const code = normalizeInviteCode(joinCode);
+                                if (!code) {
+                                    if (joinCode.trim()) router.push("/join");
+                                    return;
+                                }
                                 setJoinOpen(false);
                                 setJoinCode("");
                                 router.push(`/join/${encodeURIComponent(code)}`);
                             }}
                             style={styles.joinCodeBtn}
                         />
+                        <RoundButton onPress={() => { setJoinOpen(false); router.push("/join/scan"); }} label="Scan invite QR code" size={48}>
+                            <ScanLine size={19} color={colors.text} strokeWidth={2.1} />
+                        </RoundButton>
                     </View>
+                )}
+
+                {/* Active | Completed — always visible, so finished groups are easy to find */}
+                {!loading && groups.length > 0 && (
+                    <Segmented options={viewTabs} value={view} onChange={setView} style={styles.viewTabs} />
                 )}
 
                 {/* Skeleton while the first load runs */}
@@ -362,11 +373,14 @@ export default function TripsPage() {
                     <Users size={38} color={colors.primary} />
                     <Text style={styles.emptyTitle}>No groups yet</Text>
                     <Text style={styles.emptyText}>
-                        Create your first group above and start splitting expenses.
+                        Start one for a trip, your flat or any shared bill. Got an invite code? Tap the key above.
                     </Text>
-                    <Text style={styles.emptyQuote}>
-                        &quot;Good trips become great when expenses stay fair.&quot;
-                    </Text>
+                    <PillButton
+                        label="Create a group"
+                        onPress={() => router.push("/create-group")}
+                        icon={<Plus size={16} color={colors.onPrimary} strokeWidth={2.6} />}
+                        style={styles.emptyCta}
+                    />
                 </Block>
             );
         }
@@ -378,7 +392,7 @@ export default function TripsPage() {
                 </Text>
                 <Text style={styles.emptyStateText}>
                     {searchQuery
-                        ? "Try a different trip name or member name."
+                        ? `Nothing matches “${searchQuery.trim()}”. Tap Create to start a group with that name.`
                         : emptyTextForView[view]}
                 </Text>
             </Block>
@@ -388,15 +402,12 @@ export default function TripsPage() {
     const renderGroupCard = useCallback(({ item }) => (
         <GroupCard
             group={item}
-            onMarkCompleted={markCompleted}
-            onDeleteTrip={deleteTrip}
-            isCreator={item.isCreator}
-            view={view}
+            balance={netByGroup[item._id]}
+            onMenu={item.isCreator ? openGroupMenu : undefined}
             colors={colors}
             styles={styles}
-            isGroupCompleted={isGroupCompleted}
         />
-    ), [markCompleted, deleteTrip, view, colors, styles]);
+    ), [openGroupMenu, netByGroup, colors, styles]);
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
@@ -415,6 +426,49 @@ export default function TripsPage() {
                 keyboardShouldPersistTaps="handled"
             />
 
+            {/* "⋯" on a card: what you can do with this group, in plain words */}
+            <BottomSheet visible={!!menuGroup} onClose={() => setMenuGroup(null)} backgroundColor={colors.background}>
+                {menuGroup && (
+                    <View style={styles.menu}>
+                        <Text style={styles.menuTitle} numberOfLines={1}>{menuGroup.name}</Text>
+                        {!isGroupCompleted(menuGroup) && (
+                            <TouchableOpacity
+                                style={styles.menuItem}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                onPress={() => { const id = menuGroup._id; setMenuGroup(null); markCompleted(id); }}
+                            >
+                                <View style={[styles.menuIcon, { backgroundColor: colors.successLight }]}>
+                                    <CheckCircle2 size={20} color={colors.success} />
+                                </View>
+                                <View style={styles.menuCopy}>
+                                    <Text style={styles.menuItemTitle}>Mark as completed</Text>
+                                    <Text style={styles.menuItemSub}>
+                                        Trip or bill is over? Moves it to the Completed tab. Nothing is deleted.
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                            style={styles.menuItem}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            onPress={() => { const id = menuGroup._id; setMenuGroup(null); deleteTrip(id); }}
+                        >
+                            <View style={[styles.menuIcon, { backgroundColor: colors.errorLight }]}>
+                                <Trash2 size={19} color={colors.error} />
+                            </View>
+                            <View style={styles.menuCopy}>
+                                <Text style={[styles.menuItemTitle, { color: colors.error }]}>Delete group</Text>
+                                <Text style={styles.menuItemSub}>
+                                    Removes the group with all its expenses for everyone. Can&apos;t be undone.
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </BottomSheet>
+
             {/* Invite Modal */}
             <InviteModal
                 groupId={inviteGroupId}
@@ -429,165 +483,77 @@ export default function TripsPage() {
 const isGroupCompleted = (g) =>
     g?.isCompleted === true || g?.isCompleted === "true";
 
-/* Group Card Component (memoized so unchanged rows skip re-render) */
-const GroupCard = memo(function GroupCard({ group, isCreator = false, view = "all", onMarkCompleted, onDeleteTrip, colors, styles, isGroupCompleted }) {
-    const handlePress = () => {
-        // Navigate to group details
-        router.push(`/groups/${group._id}`);
-    };
-
-    const handleCheckboxPress = () => {
-        if (onMarkCompleted) {
-            onMarkCompleted(group._id);
-        }
-    };
-
-    const handleDeletePress = () => {
-        if (onDeleteTrip) {
-            onDeleteTrip(group._id);
-        }
-    };
+/* One group = one card: who/what on top, my balance in plain words below. */
+const GroupCard = memo(function GroupCard({ group, balance, onMenu, colors, styles }) {
+    const meta = groupTypeMeta(group.groupType || "general");
+    const Icon = getGroupIcon(group.icon) || meta.Icon;
+    const done = isGroupCompleted(group);
+    const count = group.members?.length || 0;
+    const typeLabel = meta.key === "general" ? "Group" : meta.label;
+    const net = balance ? balance.net : null;
+    const owes = net != null && net < -0.01;
+    const gets = net != null && net > 0.01;
+    const amount = net != null ? formatMoney(Math.round(Math.abs(net)), balance.currency) : "";
+    const status = done ? "Completed"
+        : owes ? `You owe ${amount}`
+        : gets ? `You get back ${amount}`
+        : net != null ? "All settled up" : "";
+    const statusColor = done ? colors.textSecondary : owes ? colors.error : gets ? colors.success : colors.textSecondary;
 
     return (
         <TouchableOpacity
-            onPress={handlePress}
+            onPress={() => router.push(`/groups/${group._id}`)}
             style={styles.groupCard}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${group.name}${status ? `, ${status}` : ""}`}
         >
-            <View style={styles.groupCardHeader}>
-                <View style={styles.groupTitleWrap}>
-                    <View style={styles.badgeRow}>
-                        <View style={[styles.ownerBadge, isCreator ? styles.ownedBadge : styles.sharedBadge]}>
-                            {isCreator ? (
-                                <Crown size={13} color={colors.primary} />
-                            ) : (
-                                <UserPlus size={13} color={colors.textSecondary} />
-                            )}
-                            <Text style={[styles.ownerBadgeText, isCreator ? styles.ownedBadgeText : styles.sharedBadgeText]}>
-                                {isCreator ? "Owned" : "Shared"}
-                            </Text>
-                        </View>
-                        <View style={[
-                            styles.typeBadge,
-                            group.groupType === "roommate"
-                                ? styles.roommateBadge
-                                : group.groupType === "trip"
-                                    ? styles.tripBadge
-                                    : styles.groupBadge
-                        ]}>
-                            {group.groupType === "roommate" ? (
-                                <Home size={11} color="#047857" />
-                            ) : group.groupType === "trip" ? (
-                                <Plane size={11} color={colors.primary} />
-                            ) : (
-                                <Users size={11} color={colors.primary} />
-                            )}
-                            <Text style={[
-                                styles.typeBadgeText,
-                                group.groupType === "roommate"
-                                    ? styles.roommateBadgeText
-                                    : group.groupType === "trip"
-                                        ? styles.tripBadgeText
-                                        : styles.groupBadgeText
-                            ]}>
-                                {group.groupType === "roommate"
-                                    ? "Roommate"
-                                    : group.groupType === "trip"
-                                        ? "Trip"
-                                        : "Group"}
-                            </Text>
-                        </View>
-                        {isGroupCompleted(group) && (
-                            <View style={styles.doneBadge}>
-                                <CheckCircle size={13} color="#059669" />
-                                <Text style={styles.doneBadgeText}>Done</Text>
-                            </View>
-                        )}
-                    </View>
-                    <Text style={styles.groupCardTitle} numberOfLines={2}>
-                        {group.name}
-                    </Text>
-                </View>
-                <ChevronsRight size={20} color={colors.textSecondary} />
-            </View>
-
-            <View style={styles.metaRow}>
-                <View style={styles.metaItem}>
-                    <Users size={14} color={colors.textSecondary} />
-                    <Text style={styles.groupCardMembers}>
-                        {group.members?.length || 0} members
-                    </Text>
-                </View>
-                {(group.updatedAt || group.createdAt) && (
-                    <View style={styles.metaItem}>
-                        <CalendarDays size={14} color={colors.textSecondary} />
-                        <Text style={styles.groupCardMembers}>
-                            {formatShortDate(group.updatedAt || group.createdAt)}
-                        </Text>
-                    </View>
+            <View style={styles.cardTop}>
+                {group.photo?.url ? (
+                    <Image source={{ uri: group.photo.url }} style={styles.groupAvatar} />
+                ) : (
+                    <LinearGradient colors={meta.accent} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.groupAvatar}>
+                        <Icon size={22} color="#fff" strokeWidth={2.2} />
+                    </LinearGradient>
                 )}
+
+                <View style={styles.cardText}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>{group.name}</Text>
+                    <Text style={styles.cardSub} numberOfLines={1}>
+                        {typeLabel} · {count} {count === 1 ? "member" : "members"}
+                    </Text>
+                </View>
+
+                {onMenu ? (
+                    <TouchableOpacity
+                        onPress={() => onMenu(group)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={styles.cardMenuBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`More options for ${group.name}`}
+                    >
+                        <MoreHorizontal size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                ) : null}
             </View>
 
-            {group.members?.length > 0 && (
-                <Text style={styles.groupCardMembersList} numberOfLines={1}>
-                    {group.members
-                        .slice(0, 3)
-                        .map((m) => m.name || m.email)
-                        .join(", ")}
-                    {group.members.length > 3 ? "…" : ""}
-                </Text>
-            )}
-
-            {/* Mark Completed */}
-            {isCreator && view !== "completed" && !isGroupCompleted(group) && (
-                <TouchableOpacity
-                    onPress={handleCheckboxPress}
-                    style={styles.checkboxContainer}
-                >
-                    <View
-                        style={[
-                            styles.checkbox,
-                            isGroupCompleted(group) && styles.checkboxChecked,
-                        ]}
-                    >
-                        {isGroupCompleted(group) && (
-                            <CheckCircle size={14} color={colors.primary} />
-                        )}
-                    </View>
-                    <Text style={styles.checkboxLabel}>Mark as Completed</Text>
-                </TouchableOpacity>
-            )}
-
-            {/* Completed Label */}
-            {view === "completed" && (
-                <View style={styles.completedLabel}>
-                    <CheckCircle size={16} color={colors.primary} />
-                    <Text style={styles.completedLabelText}>Trip Completed</Text>
+            <View style={styles.cardBottom}>
+                <View style={styles.cardStatus}>
+                    {done ? <CheckCircle2 size={15} color={colors.textSecondary} /> : null}
+                    <Text style={[styles.cardStatusText, { color: statusColor }]} numberOfLines={1}>
+                        {status || " "}
+                    </Text>
                 </View>
-            )}
-
-            {isCreator && (
-                <TouchableOpacity
-                    onPress={handleDeletePress}
-                    style={styles.deleteTripButton}
-                >
-                    <Trash2 size={15} color={colors.error} />
-                    <Text style={styles.deleteTripButtonText}>Delete Trip</Text>
-                </TouchableOpacity>
-            )}
+                <View style={styles.cardOpen}>
+                    <Text style={styles.cardOpenText}>Open</Text>
+                    <ChevronRight size={16} color={colors.textSecondary} />
+                </View>
+            </View>
         </TouchableOpacity>
     );
 });
 
-const formatShortDate = (dateValue) => {
-    const date = new Date(dateValue);
-    if (Number.isNaN(date.getTime())) return "Recent";
-
-    return date.toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-    });
-};
+const MAX_BALANCE_ROWS = 12;
 
 const getStyles = (colors) => StyleSheet.create({
     container: {
@@ -631,11 +597,6 @@ const getStyles = (colors) => StyleSheet.create({
         color: colors.text,
         letterSpacing: -0.3,
     },
-    subtitle: {
-        fontSize: 13.5,
-        color: colors.textSecondary,
-        marginTop: 4,
-    },
     searchRow: {
         flexDirection: "row",
         alignItems: "center",
@@ -649,37 +610,6 @@ const getStyles = (colors) => StyleSheet.create({
     },
     createBtn: {
         paddingHorizontal: 18,
-    },
-    filterMenu: {
-        flexDirection: "row",
-        alignItems: "center",
-        // All five filters (Active, All, Mine, Shared, Done) share one row.
-        gap: 6,
-        marginHorizontal: SCREEN_GUTTER,
-        marginBottom: 12,
-    },
-    filterPill: {
-        flex: 1,
-        alignItems: "center",
-        paddingHorizontal: 4,
-        paddingVertical: 9,
-        borderRadius: 999,
-        backgroundColor: colors.card,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: colors.border,
-    },
-    filterPillActive: {
-        backgroundColor: colors.primaryLight,
-        borderColor: colors.primary,
-    },
-    filterPillText: {
-        fontSize: 12.5,
-        textAlign: "center",
-        fontWeight: "600",
-        color: colors.textSecondary,
-    },
-    filterPillTextActive: {
-        color: colors.primary,
     },
     emptyCard: {
         alignItems: "center",
@@ -698,11 +628,13 @@ const getStyles = (colors) => StyleSheet.create({
         textAlign: "center",
         marginBottom: 16,
     },
-    emptyQuote: {
-        fontSize: 12,
-        color: colors.placeholder,
-        fontStyle: "italic",
-        textAlign: "center",
+    emptyCta: {
+        alignSelf: "stretch",
+        marginTop: 4,
+    },
+    viewTabs: {
+        marginHorizontal: SCREEN_GUTTER,
+        marginBottom: 16,
     },
     groupCard: {
         marginHorizontal: SCREEN_GUTTER,
@@ -711,136 +643,56 @@ const getStyles = (colors) => StyleSheet.create({
         backgroundColor: colors.card,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: colors.border,
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        gap: 8,
+        overflow: "hidden",
     },
-    groupCardHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        gap: 10,
-    },
-    groupTitleWrap: {
-        flex: 1,
-        gap: 7,
-    },
-    badgeRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        flexWrap: "wrap",
-    },
-    ownerBadge: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        borderRadius: 999,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-    },
-    ownedBadge: {
-        backgroundColor: colors.primaryLight,
-    },
-    sharedBadge: {
-        backgroundColor: colors.primaryLight,
-    },
-    ownerBadgeText: {
-        fontSize: 11,
-        fontWeight: "800",
-    },
-    ownedBadgeText: {
-        color: colors.primary,
-    },
-    sharedBadgeText: {
-        color: colors.textSecondary,
-    },
-    doneBadge: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        borderRadius: 999,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        backgroundColor: "#D1FAE5",
-    },
-    doneBadgeText: {
-        color: "#047857",
-        fontSize: 11,
-        fontWeight: "800",
-    },
-    groupCardTitle: {
-        fontSize: 16.5,
-        fontWeight: "600",
-        color: colors.text,
-        letterSpacing: -0.2,
-    },
-    metaRow: {
+    cardTop: {
         flexDirection: "row",
         alignItems: "center",
         gap: 14,
-        flexWrap: "wrap",
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 14,
     },
-    metaItem: {
-        flexDirection: "row",
+    groupAvatar: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
         alignItems: "center",
-        gap: 5,
-    },
-    groupCardMembers: {
-        fontSize: 13.5,
-        color: colors.textSecondary,
-    },
-    groupCardMembersList: {
-        fontSize: 12,
-        color: colors.placeholder,
-    },
-    checkboxContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        marginTop: 8,
-    },
-    checkbox: {
-        width: 18,
-        height: 18,
-        borderWidth: 2,
-        borderColor: colors.border,
-        borderRadius: 6,
         justifyContent: "center",
-        alignItems: "center",
+        overflow: "hidden",
     },
-    checkboxChecked: {
+    cardText: { flex: 1, minWidth: 0, gap: 3 },
+    cardTitle: { fontSize: 17, fontWeight: "600", color: colors.text, letterSpacing: -0.2 },
+    cardSub: { fontSize: 13.5, color: colors.textSecondary },
+    cardMenuBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: "center",
+        justifyContent: "center",
         backgroundColor: colors.primaryLight,
-        borderColor: colors.primary,
     },
-    checkboxLabel: {
-        fontSize: 14,
-        color: colors.text,
-    },
-    completedLabel: {
+    cardBottom: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 6,
-        marginTop: 8,
+        justifyContent: "space-between",
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: colors.border,
     },
-    completedLabelText: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: colors.primary,
-    },
-    deleteTripButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        alignSelf: "flex-start",
-        gap: 6,
-        marginTop: 8,
-        paddingVertical: 6,
-    },
-    deleteTripButtonText: {
-        color: colors.error,
-        fontSize: 14,
-        fontWeight: "700",
-    },
+    cardStatus: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
+    cardStatusText: { fontSize: 15, fontWeight: "700", letterSpacing: -0.2, flexShrink: 1 },
+    cardOpen: { flexDirection: "row", alignItems: "center", gap: 2 },
+    cardOpenText: { fontSize: 13.5, fontWeight: "600", color: colors.textSecondary },
+    menu: { paddingBottom: 8 },
+    menuTitle: { fontSize: 17, fontWeight: "700", color: colors.text, marginBottom: 8 },
+    menuItem: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12 },
+    menuIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+    menuCopy: { flex: 1, minWidth: 0, gap: 2 },
+    menuItemTitle: { fontSize: 16.5, fontWeight: "600", color: colors.text, letterSpacing: -0.2 },
+    menuItemSub: { fontSize: 13.5, color: colors.textSecondary, lineHeight: 18 },
     emptyStateContainer: {
         paddingVertical: 48,
         alignItems: "center",
@@ -856,38 +708,5 @@ const getStyles = (colors) => StyleSheet.create({
         fontSize: 14,
         color: colors.textSecondary,
         textAlign: "center",
-    },
-    // Group Type badges
-    typeBadge: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        borderRadius: 999,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-    },
-    roommateBadge: {
-        backgroundColor: "#D1FAE5",
-    },
-    roommateBadgeText: {
-        color: "#047857",
-        fontSize: 11,
-        fontWeight: "800",
-    },
-    tripBadge: {
-        backgroundColor: colors.primaryLight,
-    },
-    tripBadgeText: {
-        color: colors.primary,
-        fontSize: 11,
-        fontWeight: "800",
-    },
-    groupBadge: {
-        backgroundColor: colors.primaryLight,
-    },
-    groupBadgeText: {
-        color: colors.primary,
-        fontSize: 11,
-        fontWeight: "800",
     },
 });

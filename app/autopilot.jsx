@@ -7,17 +7,20 @@
  */
 import { RoundButton, useDesign } from "@/components/ui/Design";
 import { Text, TextInput } from "@/components/ui/Typography";
-import { R, surfaceStyle } from "@/constants/design";
+import { R } from "@/constants/design";
 import { SCREEN_GUTTER } from "@/constants/layout";
 import useKeyboard from "@/hooks/useKeyboard";
 import { api } from "@/lib/api";
 import {
-    approvedStepIds, errText, EXAMPLES, OPEN_STATES, runPayload, typedDecision,
+    approvedStepIds, errText, fillTemplate, OPEN_STATES, runPayload, TEMPLATES, typedDecision,
 } from "@/lib/autopilot";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { ArrowUp, ChevronDown, ChevronLeft, Globe2, Layers, Receipt, ShieldCheck, Sparkles, SquarePen, Users } from "lucide-react-native";
+import {
+    ArrowLeft, ArrowLeftRight, ArrowUp, ArrowUpLeft, Bell, ChevronDown, Gauge, Globe2, Layers, List, PiggyBank,
+    Plane, Receipt, Scale, ShieldCheck, Sparkles, SquarePen, UserMinus, UserPlus,
+} from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,7 +32,10 @@ import RunMessage, { Bubble } from "@/components/autopilot/RunMessage";
 import Autopilot3DIcon from "@/components/icons/Autopilot3DIcon";
 
 const STORE = "autopilot.thread.v1";
-const EXAMPLE_ICON = { trip: Users, bill: Receipt, owe: Layers, total: Globe2 };
+const TEMPLATE_ICON = {
+    bill: Receipt, skip: UserMinus, exact: Scale, owe: ArrowLeftRight, total: Globe2, recent: List,
+    trip: Plane, people: UserPlus, budget: PiggyBank, alert: Bell, check: Gauge,
+};
 
 export default function AutopilotScreen() {
     const params = useLocalSearchParams();
@@ -38,6 +44,8 @@ export default function AutopilotScreen() {
     const insets = useSafeAreaInsets();
     const keyboard = useKeyboard();
     const scroller = useRef(null);
+    const inputRef = useRef(null);
+    const [tab, setTab] = useState(TEMPLATES[0].key);
 
     const [caps, setCaps] = useState(null);
     const [connection, setConnection] = useState("loading"); // loading | ready | error | disabled
@@ -217,6 +225,8 @@ export default function AutopilotScreen() {
         send(text);
     };
 
+    // A starter fills the box as an editable draft; nothing is sent until the user says so.
+    const pickStarter = (text) => { setInput(text); inputRef.current?.focus?.(); };
     const reset = () => { setThread([]); setRuns({}); setInput(""); AsyncStorage.removeItem(STORE).catch(() => {}); };
     const ctxGroup = groups.find((g) => g._id === ctxId);
     const nameOf = (runId) => (id) => groups.find((g) => g._id === id)?.name || runs[runId]?.plan?.steps?.find((st) => st.type === "create_group")?.payload.name || "Group";
@@ -230,38 +240,48 @@ export default function AutopilotScreen() {
         <SafeAreaView style={s.screen} edges={["top"]}>
             <StatusBar style={isDark ? "light" : "dark"} />
             <View style={s.header}>
-                <RoundButton onPress={() => router.back()} label="Back" size={42}><ChevronLeft size={21} color={colors.text} strokeWidth={2.3} /></RoundButton>
+                <RoundButton flat onPress={() => router.back()} label="Back" size={42}><ArrowLeft size={20} color={colors.text} strokeWidth={2.4} /></RoundButton>
                 <View style={s.titleBox}>
                     <View style={s.titleRow}><Autopilot3DIcon size={24} /><Text style={s.title}>Autopilot</Text></View>
                     <Text style={s.subtitle} numberOfLines={1}>{connection === "ready" ? (caps?.ai?.mode === "local" ? "Basic mode · you're in control" : "Plan together. You're in control.") : connection === "error" ? "Connection needs a retry" : connection === "disabled" ? "Switched off on this server" : "Connecting securely…"}</Text>
                 </View>
-                {thread.length > 0 && <RoundButton onPress={reset} label="New chat" size={42} disabled={busy}><SquarePen size={18} color={colors.text} /></RoundButton>}
+                {thread.length > 0 && <RoundButton flat onPress={reset} label="New chat" size={42} disabled={busy}><SquarePen size={18} color={colors.text} /></RoundButton>}
             </View>
-            <TouchableOpacity onPress={() => setPicker(true)} style={s.context} activeOpacity={0.75} accessibilityRole="button" accessibilityLabel="Group context">
-                {ctxGroup ? <GroupTypeIcon type={ctxGroup.groupType} size={22} /> : <Layers size={16} color={colors.textSecondary} />}
-                <Text style={s.contextText} numberOfLines={1}>Working in <Text style={s.contextStrong}>{ctxGroup ? ctxGroup.name : "All groups"}</Text></Text>
-                <ChevronDown size={15} color={colors.textSecondary} />
-            </TouchableOpacity>
 
             <ScrollView ref={scroller} style={{ flex: 1 }} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 {thread.length === 0 && (
                     <View style={s.welcome}>
-                        <View style={s.eyebrow}><Sparkles size={12} color={colors.text} /><Text style={s.eyebrowText}>Less admin. More living.</Text></View>
                         <Text style={s.hero}>Money stuff,{"\n"}<Text style={{ color: colors.textSecondary }}>a little easier.</Text></Text>
-                        <Text style={s.lead}>A trip, a dinner, or the monthly bills. Tell me in English or Hinglish.</Text>
-                        <View style={s.grid}>
-                            {EXAMPLES.map((e) => {
-                                const Icon = EXAMPLE_ICON[e.key];
+                        <Text style={s.lead}>Pick a starter and edit it, or type your own in English or Hinglish.</Text>
+
+                        {/* Starters: a category row, then the real prompts for that category */}
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabs} contentContainerStyle={s.tabsContent} keyboardShouldPersistTaps="handled">
+                            {TEMPLATES.map((c) => {
+                                const on = c.key === tab;
                                 return (
-                                    <TouchableOpacity key={e.key} onPress={() => setInput(e.text)} style={s.shortcut} activeOpacity={0.8} disabled={busy} accessibilityRole="button" accessibilityLabel={e.label}>
-                                        <View style={s.shortcutIcon}><Icon size={16} color={colors.text} /></View>
-                                        <Text style={s.shortcutTitle}>{e.label}</Text>
-                                        <Text style={s.shortcutHint}>{e.hint}</Text>
+                                    <TouchableOpacity key={c.key} onPress={() => setTab(c.key)} activeOpacity={0.8} style={[s.tab, on && s.tabOn]} accessibilityRole="tab" accessibilityState={{ selected: on }}>
+                                        <Text style={[s.tabText, on && s.tabTextOn]}>{c.label}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                        <View>
+                            {(TEMPLATES.find((c) => c.key === tab) || TEMPLATES[0]).items.map((e, i) => {
+                                const Icon = TEMPLATE_ICON[e.key] || Sparkles;
+                                const text = fillTemplate(e.text, ctxGroup?.name);
+                                return (
+                                    <TouchableOpacity key={e.key} onPress={() => pickStarter(text)} style={[s.starter, i > 0 && s.starterDivider]} activeOpacity={0.7} disabled={busy} accessibilityRole="button" accessibilityLabel={e.label}>
+                                        <View style={s.starterIcon}><Icon size={17} color={colors.text} /></View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={s.starterTitle}>{e.label}</Text>
+                                            <Text style={s.starterText} numberOfLines={2}>{text}</Text>
+                                        </View>
+                                        <ArrowUpLeft size={16} color={colors.textSecondary} />
                                     </TouchableOpacity>
                                 );
                             })}
                         </View>
-                        <View style={s.trust}><ShieldCheck size={16} color={colors.success} /><Text style={s.trustText}>You review the plan before anything changes. No automatic payments.</Text></View>
+                        <View style={s.trust}><ShieldCheck size={14} color={colors.textSecondary} /><Text style={s.trustText}>Nothing changes until you approve the plan.</Text></View>
                     </View>
                 )}
                 {thread.map((item) => (
@@ -298,13 +318,20 @@ export default function AutopilotScreen() {
                 </View>
             )}
             <Animated.View style={[s.composer, { paddingBottom: bottomPad }]}>
-                <View style={s.inputRow}>
-                    <TextInput value={input} onChangeText={setInput} placeholder={placeholder} placeholderTextColor={colors.textSecondary} multiline maxLength={1500} style={s.input} accessibilityLabel="Message Autopilot" onSubmitEditing={submit} blurOnSubmit={false} />
-                    <TouchableOpacity onPress={submit} disabled={!canSend} style={[s.send, !canSend && { opacity: 0.35 }]} accessibilityRole="button" accessibilityLabel="Send">
-                        {busy ? <Loader size={16} color={t.onInk} /> : <ArrowUp size={18} color={t.onInk} strokeWidth={2.5} />}
-                    </TouchableOpacity>
+                <View style={s.box}>
+                    <TextInput ref={inputRef} value={input} onChangeText={setInput} placeholder={placeholder} placeholderTextColor={colors.textSecondary} multiline maxLength={1500} style={s.input} accessibilityLabel="Message Autopilot" onSubmitEditing={submit} blurOnSubmit={false} />
+                    <View style={s.boxRow}>
+                        <TouchableOpacity onPress={() => setPicker(true)} style={s.context} activeOpacity={0.75} accessibilityRole="button" accessibilityLabel="Group context">
+                            {ctxGroup ? <GroupTypeIcon type={ctxGroup.groupType} size={20} /> : <Layers size={14} color={colors.textSecondary} />}
+                            <Text style={s.contextText} numberOfLines={1}>{ctxGroup ? ctxGroup.name : "All groups"}</Text>
+                            <ChevronDown size={14} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                        <View style={{ flex: 1 }} />
+                        <TouchableOpacity onPress={submit} disabled={!canSend} style={[s.send, !canSend && s.sendOff]} accessibilityRole="button" accessibilityLabel="Send">
+                            {busy ? <Loader size={16} color={t.onInk} /> : <ArrowUp size={18} color={canSend ? t.onInk : colors.textSecondary} strokeWidth={2.5} />}
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                <Text style={s.footnote}>{busy ? "Preparing your next step…" : "Review first · approve when you're ready"}</Text>
             </Animated.View>
 
             <GroupPickerSheet visible={picker} groups={groups} value={ctxId} onChange={setCtxId} onClose={() => setPicker(false)} />
@@ -320,32 +347,36 @@ const getStyles = (colors, t) => StyleSheet.create({
     titleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
     title: { fontSize: 20, fontWeight: "700", color: colors.text, letterSpacing: -0.3 },
     subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-    context: { ...surfaceStyle(t), flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", marginHorizontal: SCREEN_GUTTER, marginBottom: 6, paddingLeft: 8, paddingRight: 12, paddingVertical: 6, borderRadius: R.pill, maxWidth: "92%" },
-    contextText: { fontSize: 12.5, color: colors.textSecondary, flexShrink: 1 },
-    contextStrong: { fontWeight: "700", color: colors.text },
     scroll: { paddingHorizontal: SCREEN_GUTTER, paddingTop: 8, paddingBottom: 16, gap: 16 },
-    welcome: { paddingTop: 10 },
-    eyebrow: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: t.surfaceAlt, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 5 },
-    eyebrowText: { fontSize: 11.5, fontWeight: "600", color: colors.text },
-    hero: { fontSize: 32, lineHeight: 38, fontWeight: "700", letterSpacing: -1, color: colors.text, marginTop: 16 },
-    lead: { fontSize: 14, lineHeight: 21, color: colors.textSecondary, marginTop: 10 },
-    grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 20 },
-    shortcut: { ...surfaceStyle(t), width: "48%", flexGrow: 1, borderRadius: R.block, padding: 14, gap: 4 },
-    shortcutIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: t.surfaceAlt, alignItems: "center", justifyContent: "center", marginBottom: 6 },
-    shortcutTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-    shortcutHint: { fontSize: 12, color: colors.textSecondary, lineHeight: 16 },
-    trust: { flexDirection: "row", gap: 8, alignItems: "flex-start", marginTop: 18, padding: 12, borderRadius: R.tile, backgroundColor: colors.success + "14" },
-    trustText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: colors.text },
+    welcome: { paddingTop: 6 },
+    hero: { fontSize: 30, lineHeight: 36, fontWeight: "700", letterSpacing: -0.9, color: colors.text },
+    lead: { fontSize: 14, lineHeight: 21, color: colors.textSecondary, marginTop: 8 },
+    tabs: { marginHorizontal: -SCREEN_GUTTER, marginTop: 22, flexGrow: 0 },
+    tabsContent: { paddingHorizontal: SCREEN_GUTTER, gap: 8 },
+    tab: { height: 36, paddingHorizontal: 15, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: t.fillStrong },
+    tabOn: { backgroundColor: t.ink },
+    tabText: { fontSize: 13.5, fontWeight: "600", color: colors.textSecondary },
+    tabTextOn: { color: t.onInk },
+    starter: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13 },
+    starterDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.outline },
+    starterIcon: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: t.fillStrong },
+    starterTitle: { fontSize: 14.5, fontWeight: "600", color: colors.text, letterSpacing: -0.1 },
+    starterText: { fontSize: 13, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
+    trust: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 10 },
+    trustText: { flex: 1, fontSize: 12, color: colors.textSecondary },
     inline: { flexDirection: "row", alignItems: "center", gap: 6 },
     muted: { fontSize: 13, color: colors.textSecondary },
-    chip: { ...surfaceStyle(t), alignSelf: "flex-start", borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 8 },
+    chip: { alignSelf: "flex-start", borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: t.fillStrong },
     chipText: { fontSize: 13, fontWeight: "600", color: colors.text },
     banner: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: SCREEN_GUTTER, marginBottom: 8, padding: 12, borderRadius: R.tile, backgroundColor: colors.warning + "1A" },
     bannerText: { fontSize: 12.5, lineHeight: 18, color: colors.text },
     bannerAction: { fontSize: 13, fontWeight: "700", color: colors.text, textDecorationLine: "underline" },
-    composer: { paddingHorizontal: 14, paddingTop: 8, backgroundColor: colors.background },
-    inputRow: { ...surfaceStyle(t), flexDirection: "row", alignItems: "flex-end", gap: 8, borderRadius: 24, paddingLeft: 16, paddingRight: 6, paddingVertical: 6 },
-    input: { flex: 1, maxHeight: 120, minHeight: 36, paddingTop: 8, paddingBottom: 8, fontSize: 15, color: colors.text },
+    composer: { paddingHorizontal: 16, paddingTop: 8, backgroundColor: colors.background },
+    box: { borderRadius: 26, paddingHorizontal: 8, paddingTop: 6, paddingBottom: 8, backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline },
+    input: { maxHeight: 120, minHeight: 40, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, fontSize: 15.5, color: colors.text },
+    boxRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    context: { flexDirection: "row", alignItems: "center", gap: 6, height: 36, paddingLeft: 9, paddingRight: 11, borderRadius: 18, backgroundColor: t.fill, flexShrink: 1 },
+    contextText: { fontSize: 13, fontWeight: "600", color: colors.text, flexShrink: 1 },
     send: { width: 38, height: 38, borderRadius: 19, backgroundColor: t.ink, alignItems: "center", justifyContent: "center" },
-    footnote: { textAlign: "center", fontSize: 10.5, color: colors.textSecondary, marginTop: 6 },
+    sendOff: { backgroundColor: t.fillStrong },
 });

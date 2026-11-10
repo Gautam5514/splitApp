@@ -5,7 +5,7 @@
  */
 import { IconCircle, useDesign } from "@/components/ui/Design";
 import { Text } from "@/components/ui/Typography";
-import { R, surfaceStyle } from "@/constants/design";
+import { R } from "@/constants/design";
 import { money, initials, READ_STEPS, DELETE_STEPS } from "@/lib/autopilot";
 import { router } from "expo-router";
 import {
@@ -186,10 +186,13 @@ export default function PlanSteps({ run, groupName, running, onEdit, busy }) {
                                     <Text style={s.sub} numberOfLines={1}>{p.name && step.type !== "create_group" ? p.name : groupName(p.groupId)} · {p.currency}{step.type === "create_group" && p.groupType ? ` · ${cap(p.groupType)}` : ""}</Text>
                                 )}
                             </View>
-                            <View style={[s.status, state === "verified" && { backgroundColor: colors.success + "1F" }]}>
-                                {state === "executing" ? <Loader size={11} color={colors.primary} /> : state === "verified" ? <CheckCircle2 size={11} color={colors.success} /> : <CircleDashed size={11} color={colors.textSecondary} />}
-                                <Text style={[s.statusText, state === "verified" && { color: colors.success }]}>{state === "verified" ? "Verified" : state === "executing" ? "Working" : isRead ? "Read-only" : "Proposed"}</Text>
-                            </View>
+                            {/* "Proposed" is already said by the stage label above the plan */}
+                            {(state !== "proposed" || isRead) && (
+                                <View style={[s.status, state === "verified" && { backgroundColor: colors.success + "1F" }]}>
+                                    {state === "executing" ? <Loader size={11} color={colors.primary} /> : state === "verified" ? <CheckCircle2 size={11} color={colors.success} /> : <CircleDashed size={11} color={colors.textSecondary} />}
+                                    <Text style={[s.statusText, state === "verified" && { color: colors.success }]}>{state === "verified" ? "Verified" : state === "executing" ? "Working" : "Read-only"}</Text>
+                                </View>
+                            )}
                         </View>
 
                         {p.amountMinor !== undefined && step.type !== "monitor_budget" && <Text style={s.amount}>{money(p.amountMinor, p.currency)}</Text>}
@@ -244,14 +247,15 @@ export default function PlanSteps({ run, groupName, running, onEdit, busy }) {
 }
 
 const getStyles = (colors, t) => StyleSheet.create({
-    card: { ...surfaceStyle(t), borderRadius: R.block, padding: 14 },
+    // One borderless tinted fill per step; nothing inside it gets its own box.
+    card: { backgroundColor: t.fill, borderWidth: 1, borderColor: "transparent", borderRadius: R.block, padding: 16 },
     cardHead: { flexDirection: "row", alignItems: "center", gap: 10 },
     title: { fontSize: 15, fontWeight: "600", color: colors.text, letterSpacing: -0.2 },
     sub: { fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
-    status: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill, backgroundColor: t.surfaceAlt },
+    status: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill, backgroundColor: t.outline },
     statusText: { fontSize: 11, fontWeight: "600", color: colors.textSecondary },
     amount: { fontSize: 26, fontWeight: "700", color: colors.text, marginTop: 12, letterSpacing: -0.5 },
-    inner: { backgroundColor: t.surfaceAlt, borderRadius: R.tile, padding: 10, marginTop: 10, gap: 4 },
+    inner: { marginTop: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.outline, gap: 4 },
     innerTitle: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, marginBottom: 2 },
     bar: { flexDirection: "row", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 6 },
     row: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5 },
@@ -260,16 +264,16 @@ const getStyles = (colors, t) => StyleSheet.create({
     rowMeta: { fontSize: 12, color: colors.textSecondary },
     rowAmount: { fontSize: 14, fontWeight: "600", color: colors.text },
     statRow: { flexDirection: "row", gap: 8 },
-    stat: { flex: 1, backgroundColor: t.surfaceAlt, borderRadius: R.tile, padding: 10 },
-    statLabel: { fontSize: 11, color: colors.textSecondary },
-    statValue: { fontSize: 14, fontWeight: "700", color: colors.text, marginTop: 3 },
+    stat: { flex: 1 },
+    statLabel: { fontSize: 11.5, color: colors.textSecondary },
+    statValue: { fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 2, letterSpacing: -0.2 },
     note: { fontSize: 12.5, lineHeight: 18, color: colors.textSecondary },
     inline: { flexDirection: "row", alignItems: "center", gap: 6 },
-    chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, backgroundColor: t.surfaceAlt },
+    chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, backgroundColor: t.outline },
     chipText: { fontSize: 13, fontWeight: "700", color: colors.text },
-    danger: { marginTop: 10, borderRadius: R.tile, padding: 10, backgroundColor: colors.error + "12", borderWidth: StyleSheet.hairlineWidth, borderColor: colors.error + "55" },
+    danger: { marginTop: 10, borderRadius: R.tile, padding: 10, backgroundColor: colors.error + "12" },
     dangerTitle: { fontSize: 12.5, fontWeight: "700" },
-    editBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 12, paddingVertical: 8, borderRadius: R.pill, ...surfaceStyle(t) },
+    editBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: 12, paddingHorizontal: 13, paddingVertical: 8, borderRadius: R.pill, backgroundColor: t.outline },
     editText: { fontSize: 12.5, fontWeight: "600", color: colors.text },
     link: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 12 },
     linkText: { fontSize: 13, fontWeight: "600", color: colors.primary },

@@ -31,10 +31,11 @@ Exact splits · an AI agent that does the admin · receipt scanning · realtime 
 
 [**Features**](#-features) &nbsp;·&nbsp;
 [**Autopilot**](#-autopilot) &nbsp;·&nbsp;
+[**Rewards**](#-rewards--elite-club) &nbsp;·&nbsp;
 [**Architecture**](#-architecture) &nbsp;·&nbsp;
+[**Design**](#-design-language) &nbsp;·&nbsp;
 [**Quick start**](#-quick-start) &nbsp;·&nbsp;
-[**Scripts**](#-scripts) &nbsp;·&nbsp;
-[**Release**](#-building--releasing) &nbsp;·&nbsp;
+[**Troubleshooting**](#-troubleshooting) &nbsp;·&nbsp;
 [**Contributing**](#-contributing)
 
 </div>
@@ -82,12 +83,14 @@ Trusted by **10,000+ travelers** and live on Google Play as **Splitease**.
 | ⚡ | **Minimum-Transfer Optimizer** | Nets every balance in the group and routes the fewest possible payments to settle everyone up. |
 | 💳 | **One-Tap UPI Settle** | Pay straight from the app via UPI ID or QR. The payee confirms, and balances reset automatically. |
 | 🤝 | **Two-Party Confirmation** | A settlement is only confirmed by the person on the other side of it. Nobody else in the group is asked. |
-| 🗂️ | **Group Filters** | Active · All · Mine · Shared · Done. Active trips by default, completed ones a tap away. |
+| 🗂️ | **Groups at a glance** | Every group is one card that says where you stand — *You owe ₹560*, *You get back ₹1,240* or *All settled up*. Active and Completed sit in two tabs. |
+| 🧾 | **A group page that answers first** | Your balance on top, one Add Expense button, who pays whom, then the expenses newest-first and everyone's balance. |
 | 🔔 | **Push Notifications** | Alerts for new expenses, chat, settlements and invites, plus a few well-timed tips. |
 | 📱 | **Home Screen Widget** | An Android widget shows live balances — what you owe and what's owed to you. |
-| 🎨 | **Custom Themes** | Light, dark and unlockable premium themes. |
+| 🎨 | **Themes** | White and Black modes, plus four accent themes you unlock with referral coins or your Elite tier. |
+| 🏅 | **Referral rewards** | Invite friends, earn coins, climb tiers. Your tier shows as a badge next to your name in every group. |
 | 🔐 | **Secure Auth** | Email/password and Google Sign-In, backed by Firebase Auth and Expo Secure Store. |
-| 🔗 | **Instant Invites** | Every group ships with a shareable link and invite code. Friends join in one tap. |
+| 🔗 | **Instant Invites** | Every group has a link, a 6-character code and a QR code. Friends join by tapping the link, typing the code, or scanning the QR with the camera or from a screenshot. |
 | 🤖 | **AI Chat Assistant** | Ask questions about a group's spending and get conversational answers. |
 | 📊 | **Breakdowns & Charts** | Who spent what, and where the group's money actually went. |
 
@@ -95,7 +98,7 @@ Trusted by **10,000+ travelers** and live on Google Play as **Splitease**.
 
 ## ✦ Autopilot
 
-An approval-gated AI agent, built into the app as a full screen (not a floating bubble). Tap the glossy blue **3D Autopilot icon** in the header of Home, Trips or any group. Inside a group it opens already working in that group.
+An approval-gated AI agent, built into the app as a full screen (not a floating bubble). Tap the glossy blue **3D Autopilot icon** in the header of Home, Groups or any group. Inside a group it opens already working in that group.
 
 | You say | Autopilot does |
 |---|---|
@@ -114,6 +117,27 @@ An approval-gated AI agent, built into the app as a full screen (not a floating 
 - **Same brain as the web** — it uses the shared `/agent` API, so web and app always behave the same.
 
 **Smart tips.** A tip on the 1st of the month, one weekend nudge and a few trip ideas in November–December arrive as normal notifications (bell + push), at most one a day and never at night. Tapping one opens Autopilot with a ready draft, such as *"Create group Puri Trip, budget 30000"*.
+
+---
+
+## ✦ Rewards — Elite Club
+
+Invite a friend with your code or link. The moment they join, **you get 50 coins and they get 25**. Coins do two things: they raise your tier, and you can spend them on themes.
+
+| Tier | Coins earned | What you get today |
+|---|:-:|---|
+| 🥉 Bronze | 100 | Bronze badge · **one accent theme free** (your pick) |
+| 🥈 Silver | 300 | Silver badge · **every accent theme free** |
+| 🥇 Gold | 750 | Gold badge · every accent theme |
+| 💎 **Elite Club** | 1,500 | Elite badge · every accent theme |
+
+- **The badge** sits next to your name on your profile and in each group's member list, so friends see it.
+- **Accent themes** recolour the app's ink — buttons, tabs, highlights — on top of White or Black mode: Royal Amethyst (450 coins), Emerald Noir (550), Crimson Velvet (600) and Aurum Gold (700). Pick one in **Profile → Appearance**.
+- **Tiers never drop.** They are counted from coins *earned*, not your current balance, so spending coins on a theme can't cost you a badge.
+- **The rules live on the server.** Prices, tier thresholds and what each tier unlocks come from the API, so the app and the web always agree.
+
+> [!NOTE]
+> Priority support and early access for Gold and Elite are planned, not live yet.
 
 ---
 
@@ -179,7 +203,7 @@ sequenceDiagram
 | **Networking** | Axios |
 | **UI & motion** | Reanimated 4 · Expo Linear Gradient · Expo Blur · Lucide icons · Bricolage Grotesque & Plus Jakarta Sans |
 | **Charts** | react-native-svg |
-| **Native extras** | Android home-screen widget (`react-native-android-widget`) · Play Install Referrer · Expo Notifications |
+| **Native extras** | Android home-screen widget (`react-native-android-widget`) · Expo Camera (QR invites) · Play Install Referrer · Expo Notifications |
 | **Testing** | Jest (`jest-expo`) · React Native Testing Library |
 | **Tooling** | TypeScript · ESLint (`eslint-config-expo`) · EAS Build & Submit |
 
@@ -190,18 +214,22 @@ sequenceDiagram
 ```text
 splitApp/
 ├── app/                      # Expo Router screens (file-based routing)
-│   ├── (tabs)/               #   Home · Trips (groups) · Chat · Profile
+│   ├── (tabs)/               #   Home · Groups (trips.jsx) · Chat · Profile
 │   ├── auth/                 #   Login & registration
-│   ├── groups/[id].jsx       #   Group detail — expenses, balances, settle up
+│   ├── groups/[id].jsx       #   Group detail — your balance, expenses, settle up
 │   ├── chat/ · group-chat/   #   1:1 and group chat threads
-│   ├── join/[inviteCode].jsx #   Deep-link group invites
-│   ├── info/                 #   How it works, pricing, privacy, terms
-│   └── autopilot.jsx · ai-chat.jsx · rewards.jsx · settings.jsx …
-├── components/               # Reusable UI — modals, charts, headers, chat
+│   ├── join/                 #   Join a group: deep link, typed code, QR scan
+│   ├── info/                 #   Help center, how it works, pricing, privacy, terms
+│   ├── appearance.jsx        #   White / Black mode and accent themes
+│   ├── rewards.jsx           #   Refer & earn — coins, code, tiers
+│   └── autopilot.jsx · ai-chat.jsx · settings.jsx · profile-edit.jsx …
+├── components/               # Reusable UI — modals, charts, chat
+│   ├── ui/                   #   Design-system primitives (Design.jsx), sheets, badges
+│   ├── icons/                #   Hand-drawn SVG icons (coin, Autopilot, AI)
 │   ├── autopilot/            #   Plan cards, approval, edit & group sheets
 │   └── __tests__/            #   Component tests
 ├── context/                  # Auth · Notification · Theme providers
-├── lib/                      # API client, Firebase, sockets, push, Autopilot rules
+├── lib/                      # API client, Firebase, sockets, push, Autopilot rules, accent themes
 ├── hooks/                    # Shared React hooks
 ├── widgets/                  # Android home-screen balance widget
 ├── constants/                # Design tokens, typography, theme
@@ -209,6 +237,17 @@ splitApp/
 ├── android/ · ios/           # Native projects
 └── assets/ · public/         # Icons, images, splash, sounds
 ```
+
+---
+
+## ✦ Design language
+
+One look across every screen, so new screens feel like they were always there.
+
+- **Monochrome ink on a soft canvas.** Black on near-white, or white on true black. Colour is saved for meaning: red when you owe, green when you get money back, gold for coins.
+- **Lined headings, not cards.** A section is a title followed by a hairline; its rows sit straight on the canvas. Cards are kept for things that are objects in their own right — a group, the coin wallet.
+- **One primary action per screen.** Everything rare goes behind the `⋯` menu, with a line of plain text saying what it does.
+- **Tokens and primitives, not one-off styles.** Sizes, radii and the type scale are in [`constants/design.js`](constants/design.js); `ScreenHeader`, `SectionLabel`, `ListRow`, `IconCircle`, `PillButton` and friends are in [`components/ui/Design.jsx`](components/ui/Design.jsx). Read colours from `useDesign()` so accent themes and dark mode work without extra code.
 
 ---
 
@@ -247,16 +286,21 @@ cp GoogleService-Info.plist.example GoogleService-Info.plist   # iOS
 | `EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID` | Expo Go OAuth client |
 
 > [!WARNING]
-> `.env`, `google-services.json` and `GoogleService-Info.plist` are git-ignored. **Never commit them.** UI-only contributions don't need a running backend.
+> `.env`, `google-services.json` and `GoogleService-Info.plist` are git-ignored. **Never commit them.**
+
+> [!NOTE]
+> The REST + Socket.IO backend is a separate project and is not in this repository. UI-only contributions (styling, components, layout, docs) don't need one running.
 
 ### 3 · Run
 
 ```bash
-npx expo start      # dev server — scan the QR with Expo Go or a dev client
-npm run android     # Android emulator / device
-npm run ios         # iOS simulator / device
+npm run android     # build & install the dev client on an Android emulator / device
+npm run ios         # build & install the dev client on an iOS simulator / device
+npx expo start      # afterwards: just start the dev server and open the installed app
 npm run web         # browser
 ```
+
+The app uses native modules (camera, push, Google Sign-In, the Android widget), so it runs in a **dev client**, not Expo Go. Build once with `npm run android` / `npm run ios`; after that `npx expo start` is enough until a native dependency changes.
 
 ---
 
@@ -301,19 +345,6 @@ The Android app is live on **[Google Play](https://play.google.com/store/apps/de
 
 ---
 
-## ✦ Rewards — Elite Club
-
-Referring friends earns coins that climb through reward tiers. A referral credits **50 coins** to the referrer and **25 coins** to the friend the moment they join.
-
-| Tier | Coins | Perks |
-|---|:-:|---|
-| 🥉 Bronze | 100 | Bronze badge + 1 custom theme |
-| 🥈 Silver | 300 | Silver badge + all custom themes |
-| 🥇 Gold | 750 | Gold badge + priority support + early access |
-| 💎 **Elite Club** | 1,500 | Elite badge + every future reward |
-
----
-
 ## ✦ Troubleshooting
 
 <details>
@@ -334,6 +365,18 @@ The Android OAuth client must match the package name `com.kunal.splitapp` **and*
 Both need native code. Use a dev client (`npm run android` / `npm run ios`) instead of Expo Go.
 </details>
 
+<details>
+<summary><b><code>Cannot find native module 'ExpoCamera'</code> (or any other native module)</b></summary>
+
+The app installed on your device was built before that native package was added, so reloading JavaScript can't fix it. Rebuild and reinstall the dev client with `npm run android` or `npm run ios`. Until then the QR scanner shows a "type the code instead" screen rather than crashing.
+</details>
+
+<details>
+<summary><b>Accent themes or tier badges don't appear</b></summary>
+
+They come from the API (`GET /referrals/me` → `store.themes`, and `eliteTier` on group members). An older backend doesn't send them, so the app shows only the Default accent and no badges. Point `EXPO_PUBLIC_API_URL` at a current backend.
+</details>
+
 ---
 
 ## ✦ Roadmap
@@ -341,11 +384,16 @@ Both need native code. Use a dev client (`npm run android` / `npm run ios`) inst
 - [x] Autopilot AI agent with approval, editing and Hinglish understanding
 - [x] Smart tips in the bell and push, opening Autopilot with a draft
 - [x] Two-party settlement confirmation
+- [x] Redesigned Groups, group detail, Profile, Settings and info screens
+- [x] Referral rewards that are real: tier badges and coin-unlocked accent themes
+- [x] Join a group by scanning its QR code
 - [ ] iOS App Store release (and iOS push)
 - [ ] Separate "Promotions" notification channel so tips can be muted on their own
 - [ ] Multi-currency support for international trips
 - [ ] Recurring / subscription expense splitting
 - [ ] Export settlements as PDF statements
+- [ ] Priority support and early access for Gold and Elite members
+- [ ] Remember the chosen accent theme on the account, so it follows you across devices and the web
 
 ---
 
@@ -363,7 +411,7 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md), and report security iss
 ## ✦ Support
 
 - 🐛 **Bugs & ideas** — [open an issue](https://github.com/Gautam5514/splitApp/issues)
-- 📧 **In-app** — **Settings → Contact us**, or email `support@splitease.app`
+- 📧 **In-app** — **Profile → Help Center → Contact us**, or email `support@splitease.app`
 
 ## ✦ License
 

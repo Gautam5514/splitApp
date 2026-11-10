@@ -1,9 +1,9 @@
-import { Block, PillButton, ScreenHeader, useDesign } from "@/components/ui/Design";
+import { PillButton, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
 import { Text } from "@/components/ui/Typography";
 import { SCREEN_GUTTER } from "@/constants/layout";
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
 import { router } from "expo-router";
-import { Check, Clock, Sparkles } from "lucide-react-native";
+import { Check, Clock } from "lucide-react-native";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -72,68 +72,63 @@ const FAQS = [
 ];
 
 export default function PricingScreen() {
-    const { colors, t } = useDesign();
+    const { colors } = useDesign();
     const bottomSpacing = useBottomSpacing(32);
     const styles = getStyles(colors);
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <ScreenHeader title="Pricing" back />
+            <ScreenHeader flat back title="Pricing" />
 
-            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
-                <Text style={styles.eyebrow}>Simple, honest pricing</Text>
+            <ScrollView contentContainerStyle={{ paddingBottom: bottomSpacing }} showsVerticalScrollIndicator={false}>
                 <Text style={styles.description}>
                     The core app is free forever. A Pro tier is on the way for power users.
                 </Text>
 
                 {PLANS.map((plan) => (
-                    <Block
-                        key={plan.name}
-                        style={[styles.planBlock, plan.highlight && { borderColor: t.ink, borderWidth: 1.5 }]}
-                    >
-                        {plan.highlight && (
-                            <View style={[styles.badge, { backgroundColor: t.ink }]}>
-                                <Sparkles size={12} color={colors.onPrimary} />
-                                <Text style={[styles.badgeText, { color: colors.onPrimary }]}>Most popular</Text>
-                            </View>
-                        )}
-                        <Text style={styles.planName}>{plan.name}</Text>
-                        <Text style={styles.planPrice}>{plan.price}</Text>
-                        <Text style={styles.planBlurb}>{plan.blurb}</Text>
-                        <PillButton
-                            label={plan.cta}
-                            variant={plan.highlight ? "primary" : "secondary"}
-                            onPress={() => (plan.highlight ? router.replace("/(tabs)/home") : router.push("/info/contact"))}
-                            style={styles.planCta}
-                        />
-                    </Block>
+                    <View key={plan.name}>
+                        <SectionLabel line>{plan.name}</SectionLabel>
+                        <View style={styles.section}>
+                            <Text style={[styles.planPrice, !plan.highlight && styles.planPriceMuted]}>{plan.price}</Text>
+                            <Text style={styles.planBlurb}>{plan.blurb}</Text>
+                            <PillButton
+                                label={plan.cta}
+                                variant={plan.highlight ? "primary" : "secondary"}
+                                onPress={() => (plan.highlight ? router.replace("/(tabs)/home") : router.push("/info/contact"))}
+                                style={styles.planCta}
+                            />
+                        </View>
+                    </View>
                 ))}
 
-                <Text style={styles.sectionHeading}>What{"'"}s included</Text>
                 {FEATURE_GROUPS.map((group) => (
-                    <Block key={group.title} style={styles.block}>
-                        <Text style={styles.cardTitle}>{group.title}</Text>
-                        {group.features.map(([label, state]) => (
-                            <View key={label} style={styles.featureRow}>
-                                {state === "soon" ? (
-                                    <Clock size={16} color={colors.warning} />
-                                ) : (
-                                    <Check size={16} color={colors.success} />
-                                )}
-                                <Text style={styles.featureLabel}>{label}</Text>
-                                {state === "soon" && <Text style={styles.soonTag}>Soon</Text>}
-                            </View>
-                        ))}
-                    </Block>
+                    <View key={group.title}>
+                        <SectionLabel line>{group.title}</SectionLabel>
+                        <View style={styles.section}>
+                            {group.features.map(([label, state]) => (
+                                <View key={label} style={styles.featureRow}>
+                                    {state === "soon" ? (
+                                        <Clock size={16} color={colors.warning} />
+                                    ) : (
+                                        <Check size={16} color={colors.success} />
+                                    )}
+                                    <Text style={styles.featureLabel}>{label}</Text>
+                                    {state === "soon" && <Text style={styles.soonTag}>Soon</Text>}
+                                </View>
+                            ))}
+                        </View>
+                    </View>
                 ))}
 
-                <Text style={styles.sectionHeading}>Frequently asked</Text>
-                {FAQS.map((f) => (
-                    <Block key={f.q} style={styles.block}>
-                        <Text style={styles.faqQ}>{f.q}</Text>
-                        <Text style={styles.faqA}>{f.a}</Text>
-                    </Block>
-                ))}
+                <SectionLabel line>Questions</SectionLabel>
+                <View style={[styles.section, styles.faqs]}>
+                    {FAQS.map((f) => (
+                        <View key={f.q} style={styles.faq}>
+                            <Text style={styles.faqQ}>{f.q}</Text>
+                            <Text style={styles.faqA}>{f.a}</Text>
+                        </View>
+                    ))}
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -141,25 +136,18 @@ export default function PricingScreen() {
 
 const getStyles = (colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    scroll: { paddingTop: 4, paddingBottom: 48 },
-    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
-    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 4, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
-    planBlock: { gap: 6 },
-    badge: {
-        flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start",
-        paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 4,
-    },
-    badgeText: { fontSize: 11, fontWeight: "800" },
-    planName: { fontSize: 18, fontWeight: "800", color: colors.text },
-    planPrice: { fontSize: 28, fontWeight: "800", color: colors.text },
-    planBlurb: { fontSize: 14, lineHeight: 21, color: colors.textSecondary, marginVertical: 4 },
-    planCta: { marginTop: 6 },
-    sectionHeading: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 28, marginBottom: 2, marginHorizontal: SCREEN_GUTTER },
-    block: { gap: 10 },
-    cardTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
+    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginBottom: 14, marginHorizontal: SCREEN_GUTTER },
+    // Everything sits straight on the canvas under a lined heading (no cards)
+    section: { paddingHorizontal: SCREEN_GUTTER, gap: 10, marginBottom: 18 },
+    planPrice: { fontSize: 30, fontWeight: "700", color: colors.text, letterSpacing: -0.3 },
+    planPriceMuted: { fontSize: 22, color: colors.textSecondary },
+    planBlurb: { fontSize: 14.5, lineHeight: 22, color: colors.textSecondary },
+    planCta: { marginTop: 4 },
     featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-    featureLabel: { flex: 1, fontSize: 14, color: colors.text },
-    soonTag: { fontSize: 11, fontWeight: "700", color: colors.warning },
-    faqQ: { fontSize: 15, fontWeight: "700", color: colors.text },
-    faqA: { fontSize: 14, lineHeight: 21, color: colors.textSecondary },
+    featureLabel: { flex: 1, fontSize: 14.5, color: colors.text },
+    soonTag: { fontSize: 12, fontWeight: "600", color: colors.warning },
+    faqs: { gap: 16 },
+    faq: { gap: 4 },
+    faqQ: { fontSize: 15, fontWeight: "600", color: colors.text },
+    faqA: { fontSize: 14.5, lineHeight: 22, color: colors.textSecondary },
 });

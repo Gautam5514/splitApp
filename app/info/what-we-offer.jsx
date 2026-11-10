@@ -1,4 +1,5 @@
-import { Block, IconCircle, PillButton, ScreenHeader, useDesign } from "@/components/ui/Design";
+import { IconCircle, PillButton, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
+import CoinIcon from "@/components/icons/CoinIcon";
 import { Text } from "@/components/ui/Typography";
 import { SCREEN_GUTTER } from "@/constants/layout";
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
@@ -41,74 +42,59 @@ const TIERS = [
 ];
 
 export default function WhatWeOfferScreen() {
-    const { colors, t } = useDesign();
+    const { colors } = useDesign();
     const bottomSpacing = useBottomSpacing(32);
     const styles = getStyles(colors);
 
+    const item = (Icon, title, desc) => (
+        <View key={title} style={styles.item}>
+            <IconCircle size={40} tint={colors.primaryLight}>
+                <Icon size={18} color={colors.text} strokeWidth={2} />
+            </IconCircle>
+            <View style={styles.itemText}>
+                <Text style={styles.itemTitle}>{title}</Text>
+                <Text style={styles.itemDesc}>{desc}</Text>
+            </View>
+        </View>
+    );
+
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <ScreenHeader title="What we offer" back />
+            <ScreenHeader flat back title="What SplitEase offers" />
 
-            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
-                <Text style={styles.eyebrow}>Everything to split smarter</Text>
+            <ScrollView contentContainerStyle={{ paddingBottom: bottomSpacing }} showsVerticalScrollIndicator={false}>
                 <Text style={styles.description}>
                     From AI receipt scanning to one-tap settlement and rewards, SplitEase covers the whole journey.
                 </Text>
 
-                <Text style={styles.sectionHeading}>Core features</Text>
-                {FEATURES.map((f) => {
-                    const Icon = f.icon;
-                    return (
-                        <Block key={f.title} style={styles.rowBlock}>
-                            <IconCircle size={44}>
-                                <Icon size={20} color={colors.primary} />
-                            </IconCircle>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.cardTitle}>{f.title}</Text>
-                                <Text style={styles.cardDesc}>{f.desc}</Text>
-                            </View>
-                        </Block>
-                    );
-                })}
+                <SectionLabel line>Features</SectionLabel>
+                <View style={styles.section}>{FEATURES.map((f) => item(f.icon, f.title, f.desc))}</View>
 
-                <Text style={styles.sectionHeading}>How referrals work</Text>
-                {REFERRAL_STEPS.map((s, i) => {
-                    const Icon = s.icon;
-                    return (
-                        <Block key={s.title} style={styles.rowBlock}>
-                            <IconCircle size={44}>
-                                <Icon size={20} color={colors.primary} />
-                            </IconCircle>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.cardTitle}>
-                                    {i + 1}. {s.title}
-                                </Text>
-                                <Text style={styles.cardDesc}>{s.desc}</Text>
-                            </View>
-                        </Block>
-                    );
-                })}
+                <SectionLabel line>How referrals work</SectionLabel>
+                <View style={styles.section}>
+                    {REFERRAL_STEPS.map((s, i) => item(s.icon, `${i + 1}. ${s.title}`, s.desc))}
+                </View>
 
-                <Text style={styles.sectionHeading}>Elite Club tiers</Text>
-                {TIERS.map((tier) => (
-                    <Block key={tier.name} style={[styles.tierBlock, tier.featured && { borderColor: t.ink, borderWidth: 1.5 }]}>
-                        <View style={styles.tierLeft}>
+                <SectionLabel line>Elite Club tiers</SectionLabel>
+                <View style={styles.section}>
+                    {TIERS.map((tier) => (
+                        <View key={tier.name} style={styles.tier}>
                             <Trophy size={18} color={tier.featured ? colors.warning : colors.textSecondary} />
-                            <View>
-                                <Text style={styles.tierName}>{tier.name}</Text>
-                                <Text style={styles.tierPerk}>{tier.perk}</Text>
+                            <View style={styles.itemText}>
+                                <Text style={styles.itemTitle}>{tier.name}</Text>
+                                <Text style={styles.itemDesc}>{tier.perk}</Text>
+                            </View>
+                            <View style={styles.tierCoins}>
+                                <CoinIcon size={18} />
+                                <Text style={styles.tierCoinsText}>{tier.coins}</Text>
                             </View>
                         </View>
-                        <View style={styles.tierCoins}>
-                            <Coins size={14} color="#B45309" />
-                            <Text style={styles.tierCoinsText}>{tier.coins}</Text>
-                        </View>
-                    </Block>
-                ))}
+                    ))}
+                </View>
 
                 <PillButton
                     label="View my rewards"
-                    onPress={() => router.push("/(tabs)/profile")}
+                    onPress={() => router.push("/rewards")}
                     style={styles.cta}
                 />
             </ScrollView>
@@ -118,21 +104,15 @@ export default function WhatWeOfferScreen() {
 
 const getStyles = (colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    scroll: { paddingTop: 4, paddingBottom: 48 },
-    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
-    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 4, marginHorizontal: SCREEN_GUTTER },
-    sectionHeading: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: 28, marginBottom: 2, marginHorizontal: SCREEN_GUTTER },
-    rowBlock: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
-    cardTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
-    cardDesc: { fontSize: 13, lineHeight: 20, color: colors.textSecondary, marginTop: 3 },
-    tierBlock: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    tierLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-    tierName: { fontSize: 15, fontWeight: "700", color: colors.text },
-    tierPerk: { fontSize: 12, color: colors.textSecondary, marginTop: 2, maxWidth: 200 },
-    tierCoins: {
-        flexDirection: "row", alignItems: "center", gap: 4,
-        backgroundColor: "#FEF3C7", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5,
-    },
-    tierCoinsText: { fontSize: 13, fontWeight: "800", color: "#92400E" },
-    cta: { marginHorizontal: SCREEN_GUTTER, marginTop: 4 },
+    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginBottom: 14, marginHorizontal: SCREEN_GUTTER },
+    // Everything sits straight on the canvas under a lined heading (no cards)
+    section: { paddingHorizontal: SCREEN_GUTTER, gap: 16, marginBottom: 20 },
+    item: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+    itemText: { flex: 1, minWidth: 0, gap: 3 },
+    itemTitle: { fontSize: 16, fontWeight: "600", color: colors.text, letterSpacing: -0.2 },
+    itemDesc: { fontSize: 14, lineHeight: 21, color: colors.textSecondary },
+    tier: { flexDirection: "row", alignItems: "center", gap: 14 },
+    tierCoins: { flexDirection: "row", alignItems: "center", gap: 5 },
+    tierCoinsText: { fontSize: 15, fontWeight: "700", color: colors.text },
+    cta: { marginHorizontal: SCREEN_GUTTER, marginTop: 2 },
 });

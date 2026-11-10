@@ -1,4 +1,5 @@
 import { Block, PillButton, SectionLabel, useDesign } from "@/components/ui/Design";
+import { flatFill } from "@/constants/design";
 import { RowListSkeleton } from "@/components/ui/Skeleton";
 import { api } from "@/lib/api";
 import { PlusCircle } from "lucide-react-native";
@@ -99,7 +100,7 @@ export default function NotepadSection({ groupId }) {
             </SectionLabel>
 
             {notepads.length === 0 ? (
-                <Block>
+                <Block style={flatFill(t)}>
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyTitle}>No Notepads Yet</Text>
                         <Text style={styles.emptyText}>
@@ -109,7 +110,7 @@ export default function NotepadSection({ groupId }) {
                 </Block>
             ) : (
                 notepads.map((notepad) => (
-                    <Block key={notepad._id}>
+                    <Block key={notepad._id} style={flatFill(t)}>
                         <Text style={styles.notepadTitle}>{notepad.title}</Text>
 
                         {notepad.steps.length > 0 && (

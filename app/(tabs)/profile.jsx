@@ -1,244 +1,376 @@
-import { Skeleton } from "@/components/ui/Skeleton";
-import { Alert } from "@/lib/alert";
+import { CountBadge, IconCircle, ListRow, PillButton, RoundButton, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
+import { Skeleton, SkeletonCircle } from "@/components/ui/Skeleton";
+import TierBadge from "@/components/ui/TierBadge";
+import { Text } from "@/components/ui/Typography";
+import { R, TYPE } from "@/constants/design";
+import { SCREEN_GUTTER } from "@/constants/layout";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useTabScreenBottomPadding } from "@/hooks/useSafeSpacing";
+import { Alert } from "@/lib/alert";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useIsFocused } from "@react-navigation/native";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import {
+    Check,
     ChevronRight,
-    CircleUserRound,
+    Copy,
     FileText,
     Gift,
     HelpCircle,
     Info,
     LogOut,
-    Moon,
+    Mail,
     Palette,
+    Plus,
+    Settings,
     ShieldCheck,
-    Sun,
-    User,
+    UserRound,
+    Wallet,
 } from "lucide-react-native";
-import { useEffect, useState } from "react";
-import {
-    Image,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Switch,
-    TouchableOpacity,
-    View,
-} from "react-native";
-import { Text } from "@/components/ui/Typography";
-import { useIsFocused } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTabScreenBottomPadding } from "@/hooks/useSafeSpacing";
-import { SCREEN_GUTTER } from "@/constants/layout";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Image, RefreshControl, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+const PROFILE_CACHE = "profile_cache_v1";
+const ME_CACHE = "me_cache_v1";
+const APP_VERSION = "10.0.3"; // shown in the footer
+
+const readCache = async (key) => {
+    try {
+        const raw = await AsyncStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null; // a corrupt cache must never block the screen
+    }
+};
 
 export default function ProfilePage() {
     const { logout } = useAuth();
-    const { colors, theme, toggleTheme } = useTheme();
+    const { colors, isDark, t } = useDesign();
+    const { accent, setAccent } = useTheme();
     const tabBottomPadding = useTabScreenBottomPadding();
-    const insets = useSafeAreaInsets();
     const isFocused = useIsFocused();
-    const isDark = theme === "dark";
-    const styles = getStyles(colors, isDark);
+    const styles = getStyles(colors, t);
 
     const [profile, setProfile] = useState({});
     const [googlePhoto, setGooglePhoto] = useState(null);
     const [loaded, setLoaded] = useState(false);
+    const [failed, setFailed] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [coins, setCoins] = useState(null);
+    const [tier, setTier] = useState(null); // Elite tier earned by referring friends
+    const [inviteCount, setInviteCount] = useState(0);
+    const [copied, setCopied] = useState(false);
+    const [loggingOut, setLoggingOut] = useState(false);
+    const copyTimer = useRef(null);
 
     const avatarUrl = profile.profileImage?.url || googlePhoto || auth?.currentUser?.photoURL;
-    const nameKnown = profile.name || auth?.currentUser?.displayName;
-    const emailKnown = profile.email || auth?.currentUser?.email;
-    const displayName = nameKnown || "Your Name";
-    const displayEmail = emailKnown || "you@example.com";
-    // Placeholder text only after we know there's really nothing to show.
-    const showSkeleton = !loaded && !nameKnown;
-    const modeLabel = isDark ? "Black" : "Light";
+    const name = profile.name || auth?.currentUser?.displayName || "";
+    const email = profile.email || auth?.currentUser?.email || "";
+    const upiId = (profile.upiId || "").trim();
+    const hasQr = !!profile.upiQr?.url;
+    const showSkeleton = !loaded && !name;
 
+    const load = useCallback(async () => {
+        const [pRes, mRes, rRes, iRes] = await Promise.allSettled([
+            api.get("/profile"),
+            api.get("/users/me"),
+            api.get("/referrals/me"),
+            api.get("/invites"),
+        ]);
+        if (pRes.status === "fulfilled") {
+            const data = pRes.value?.data || {};
+            setProfile(data);
+            setFailed(false);
+            AsyncStorage.setItem(PROFILE_CACHE, JSON.stringify(data)).catch(() => {});
+        } else {
+            setFailed(true);
+        }
+        if (mRes.status === "fulfilled") {
+            const me = mRes.value?.data;
+            setGooglePhoto(me?.imageUrl || me?.photoURL || me?.profileImage?.url || null);
+            AsyncStorage.setItem(ME_CACHE, JSON.stringify(me || {})).catch(() => {});
+        }
+        // Extras: nice to have, never block or break the screen.
+        if (rRes.status === "fulfilled" && typeof rRes.value?.data?.coins === "number") setCoins(rRes.value.data.coins);
+        if (rRes.status === "fulfilled") setTier(rRes.value?.data?.eliteClub?.tier?.key || null);
+        if (iRes.status === "fulfilled") setInviteCount(Array.isArray(iRes.value?.data) ? iRes.value.data.length : 0);
+        setLoaded(true);
+    }, []);
+
+    // Cached copy first (instant), then the network.
     useEffect(() => {
         (async () => {
-            const [cp, cm] = await Promise.all([
-                AsyncStorage.getItem("profile_cache_v1"),
-                AsyncStorage.getItem("me_cache_v1"),
-            ]);
-            if (cp) setProfile(JSON.parse(cp));
-            if (cm) {
-                const me = JSON.parse(cm);
-                setGooglePhoto(me?.imageUrl || me?.photoURL || me?.profileImage?.url || null);
-            }
-            try {
-                const [pRes, mRes] = await Promise.allSettled([api.get("/profile"), api.get("/users/me")]);
-                if (pRes.status === "fulfilled") {
-                    setProfile(pRes.value.data || {});
-                    AsyncStorage.setItem("profile_cache_v1", JSON.stringify(pRes.value.data || {}));
-                }
-                if (mRes.status === "fulfilled") {
-                    const me = mRes.value.data;
-                    setGooglePhoto(me?.imageUrl || me?.photoURL || me?.profileImage?.url || null);
-                    AsyncStorage.setItem("me_cache_v1", JSON.stringify(me));
-                }
-            } catch {
-                // keep cache
-            } finally {
-                setLoaded(true);
-            }
+            const [cp, cm] = await Promise.all([readCache(PROFILE_CACHE), readCache(ME_CACHE)]);
+            if (cp) setProfile((p) => (Object.keys(p).length ? p : cp));
+            if (cm) setGooglePhoto((g) => g || cm.imageUrl || cm.photoURL || cm.profileImage?.url || null);
         })();
+        return () => clearTimeout(copyTimer.current);
     }, []);
+
+    // Refetch every time the tab comes back into view, so a name / photo / UPI
+    // change made on the edit screen shows up straight away.
+    useEffect(() => {
+        if (isFocused) load();
+    }, [isFocused, load]);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await load();
+        setRefreshing(false);
+    };
+
+    const copyUpi = async () => {
+        try {
+            await Clipboard.setStringAsync(upiId);
+            Haptics.selectionAsync?.().catch?.(() => {});
+            setCopied(true);
+            clearTimeout(copyTimer.current);
+            copyTimer.current = setTimeout(() => setCopied(false), 2000);
+        } catch {
+            Alert.alert("Couldn't copy", "Please copy your UPI ID from Personal details.");
+        }
+    };
 
     const doLogout = () => {
         Alert.alert("Log out", "Are you sure you want to log out?", [
             { text: "Cancel", style: "cancel" },
-            { text: "Log out", style: "destructive", onPress: async () => { await logout(); router.replace("/auth/login"); } },
+            {
+                text: "Log out",
+                style: "destructive",
+                onPress: async () => {
+                    setLoggingOut(true);
+                    try {
+                        await logout();
+                        // Don't leave this person's name / photo / UPI for the next login.
+                        await Promise.all([
+                            AsyncStorage.removeItem(PROFILE_CACHE),
+                            AsyncStorage.removeItem(ME_CACHE),
+                            setAccent(null), // an unlocked theme belongs to the account, not the phone
+                        ]).catch(() => {});
+                    } finally {
+                        setLoggingOut(false);
+                        router.replace("/auth/login");
+                    }
+                },
+            },
         ]);
     };
 
+    const openEdit = () => router.push("/profile-edit");
+    const row = (Icon, title, onPress, extra = {}) => (
+        <ListRow
+            style={styles.row}
+            onPress={onPress}
+            title={title}
+            subtitle={extra.subtitle}
+            leading={
+                <IconCircle size={40} tint={t.fillStrong}>
+                    <Icon size={18} color={colors.text} strokeWidth={2} />
+                </IconCircle>
+            }
+            trailing={
+                <View style={styles.rowTrailing}>
+                    {extra.badge ? <CountBadge value={extra.badge} /> : null}
+                    {extra.value ? <Text style={styles.rowValue} numberOfLines={1}>{extra.value}</Text> : null}
+                    <ChevronRight size={20} color={colors.textSecondary} />
+                </View>
+            }
+        />
+    );
+
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container} edges={["top"]}>
             {isFocused && <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />}
             <ScrollView
-                contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8, paddingBottom: tabBottomPadding }]}
+                contentContainerStyle={{ paddingBottom: tabBottomPadding }}
                 showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textSecondary} />}
             >
-                {/* Centered title */}
-                <Text style={styles.pageTitle}>Profile</Text>
+                <ScreenHeader
+                    title="Profile"
+                    right={
+                        <RoundButton label="Settings" onPress={() => router.push("/settings")}>
+                            <Settings size={20} color={colors.text} strokeWidth={2.1} />
+                        </RoundButton>
+                    }
+                />
 
-                {/* Profile card */}
-                <TouchableOpacity style={styles.profileCard} activeOpacity={0.85} onPress={() => router.push("/profile-edit")}>
-                    {avatarUrl ? (
-                        <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-                    ) : (
-                        <View style={styles.avatarPh}><User size={34} color={colors.primary} /></View>
-                    )}
-                    <View style={styles.profileText}>
+                {/* Who I am + how people pay me */}
+                <View style={styles.idCard}>
+                    <TouchableOpacity
+                        style={styles.idTop}
+                        activeOpacity={0.75}
+                        onPress={openEdit}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit profile${name ? `, ${name}` : ""}`}
+                    >
                         {showSkeleton ? (
-                            <>
-                                <Skeleton width={140} height={16} />
-                                <Skeleton width={190} height={12} style={{ marginTop: 8 }} />
-                            </>
+                            <SkeletonCircle size={64} />
+                        ) : avatarUrl ? (
+                            <Image source={{ uri: avatarUrl }} style={styles.avatar} accessibilityIgnoresInvertColors />
                         ) : (
-                            <>
-                                <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
-                                <Text style={styles.profileEmail} numberOfLines={1}>{displayEmail}</Text>
-                            </>
+                            <View style={[styles.avatar, styles.avatarFallback]}>
+                                {name ? (
+                                    <Text style={styles.avatarInitial}>{name.charAt(0).toUpperCase()}</Text>
+                                ) : (
+                                    <UserRound size={28} color={t.onInk} />
+                                )}
+                            </View>
                         )}
-                    </View>
-                </TouchableOpacity>
 
-                {/* Account */}
-                <Section label="Account" styles={styles}>
-                    <Row styles={styles} colors={colors} Icon={CircleUserRound} label="Manage Profile" onPress={() => router.push("/profile-edit")} />
-                    <Divider styles={styles} />
-                    <Row
-                        styles={styles} colors={colors} Icon={isDark ? Moon : Sun} label="Dark Mode" hideChevron
-                        trailing={
-                            <Switch
-                                value={isDark}
-                                onValueChange={toggleTheme}
-                                trackColor={{ false: "#E5E7EB", true: colors.primary }}
-                                thumbColor="#fff"
-                                ios_backgroundColor="#E5E7EB"
-                            />
-                        }
-                    />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={ShieldCheck} label="Privacy & Security" onPress={() => router.push("/info/privacy")} />
-                </Section>
+                        <View style={styles.idText}>
+                            {showSkeleton ? (
+                                <>
+                                    <Skeleton width={140} height={18} />
+                                    <Skeleton width={190} height={12} style={{ marginTop: 8 }} />
+                                </>
+                            ) : (
+                                <>
+                                    <View style={styles.nameRow}>
+                                        <Text style={styles.name} numberOfLines={1}>{name || "Add your name"}</Text>
+                                        <TierBadge tier={tier} />
+                                    </View>
+                                    {email ? <Text style={styles.email} numberOfLines={1}>{email}</Text> : null}
+                                </>
+                            )}
+                        </View>
+                        <ChevronRight size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
 
-                {/* Preferences */}
-                <Section label="Preferences" styles={styles}>
-                    <Row styles={styles} colors={colors} Icon={Palette} label="Appearance" value={modeLabel} onPress={() => router.push("/appearance")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={Gift} label="Referrals & Rewards" onPress={() => router.push("/rewards")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={Info} label="About Us" onPress={() => router.push("/info/what-we-offer")} />
-                </Section>
+                    {/* Couldn't load and nothing cached: say so, don't show made-up details */}
+                    {loaded && failed && !name ? (
+                        <View style={styles.idBottom}>
+                            <Text style={[styles.payHint, { flex: 1 }]}>Couldn&apos;t load your profile. Check your connection.</Text>
+                            <TouchableOpacity style={styles.chip} onPress={load} activeOpacity={0.75} accessibilityRole="button">
+                                <Text style={styles.chipText}>Try again</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : loaded && !failed ? (
+                        upiId ? (
+                            <View style={styles.idBottom}>
+                                <View style={styles.payIcon}><Wallet size={18} color={colors.text} strokeWidth={2} /></View>
+                                <View style={styles.payText}>
+                                    <Text style={styles.payLabel}>Friends pay you at</Text>
+                                    <Text style={styles.payValue} numberOfLines={1}>{upiId}</Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.chip}
+                                    onPress={copyUpi}
+                                    activeOpacity={0.75}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={copied ? "UPI ID copied" : "Copy UPI ID"}
+                                >
+                                    {copied ? <Check size={14} color={colors.success} strokeWidth={2.6} /> : <Copy size={14} color={colors.text} />}
+                                    <Text style={[styles.chipText, copied && { color: colors.success }]}>{copied ? "Copied" : "Copy"}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <TouchableOpacity
+                                style={styles.idBottom}
+                                onPress={openEdit}
+                                activeOpacity={0.75}
+                                accessibilityRole="button"
+                                accessibilityLabel="Add your UPI ID so friends can pay you"
+                            >
+                                <View style={styles.payIcon}><Wallet size={18} color={colors.text} strokeWidth={2} /></View>
+                                <View style={styles.payText}>
+                                    <Text style={styles.payValue}>{hasQr ? "Add your UPI ID too" : "Add your UPI ID"}</Text>
+                                    <Text style={styles.payHint}>So friends can pay you back in one tap</Text>
+                                </View>
+                                <View style={[styles.chip, styles.chipInk]}>
+                                    <Plus size={14} color={t.onInk} strokeWidth={2.8} />
+                                    <Text style={[styles.chipText, { color: t.onInk }]}>Add</Text>
+                                </View>
+                            </TouchableOpacity>
+                        )
+                    ) : null}
+                </View>
 
-                {/* Support */}
-                <Section label="Support" styles={styles}>
-                    <Row styles={styles} colors={colors} Icon={HelpCircle} label="Help Center" onPress={() => router.push("/info/help-center")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={FileText} label="Settings" onPress={() => router.push("/settings")} />
-                    <Divider styles={styles} />
-                    <Row styles={styles} colors={colors} Icon={LogOut} label="Log Out" danger onPress={doLogout} hideChevron />
-                </Section>
+                <SectionLabel line>Account</SectionLabel>
+                <View style={styles.group}>
+                    {row(UserRound, "Personal details", openEdit)}
+                    {row(Mail, "Group invites", () => router.push("/invites"), { badge: inviteCount })}
+                    {row(ShieldCheck, "Privacy & blocking", () => router.push("/privacy"))}
+                </View>
 
-                <Text style={styles.version}>SplitEase · v1.0.0</Text>
+                <SectionLabel line>Preferences</SectionLabel>
+                <View style={styles.group}>
+                    {row(Palette, "Appearance", () => router.push("/appearance"), { value: `${isDark ? "Black" : "White"}${accent?.name ? ` · ${accent.name}` : ""}` })}
+                    {row(Gift, "Refer & earn", () => router.push("/rewards"), {
+                        value: coins != null ? `${coins} ${coins === 1 ? "coin" : "coins"}` : undefined,
+                    })}
+                </View>
+
+                <SectionLabel line>Help</SectionLabel>
+                <View style={styles.group}>
+                    {row(HelpCircle, "Help Center", () => router.push("/info/help-center"))}
+                    {row(Info, "What SplitEase offers", () => router.push("/info/what-we-offer"))}
+                    {row(FileText, "Privacy Policy", () => router.push("/info/privacy"))}
+                </View>
+
+                <PillButton
+                    variant="danger"
+                    label="Log Out"
+                    onPress={doLogout}
+                    loading={loggingOut}
+                    icon={<LogOut size={18} color={colors.error} />}
+                    style={styles.logout}
+                />
+
+                <Text style={styles.version}>SplitEase v{APP_VERSION}</Text>
             </ScrollView>
-        </View>
+        </SafeAreaView>
     );
 }
 
-/* ── Reusable pieces that match the reference style ─────────────────────── */
-function Section({ label, children, styles }) {
-    return (
-        <View>
-            <Text style={styles.sectionLabel}>{label}</Text>
-            <View style={styles.card}>{children}</View>
-        </View>
-    );
-}
-
-function Row({ styles, colors, Icon, label, value, trailing, onPress, danger, hideChevron }) {
-    const tint = danger ? colors.error : colors.text;
-    const Wrapper = onPress ? TouchableOpacity : View;
-    return (
-        <Wrapper style={styles.row} activeOpacity={0.7} onPress={onPress} accessibilityRole={onPress ? "button" : undefined} accessibilityLabel={label}>
-            <View style={styles.rowIcon}><Icon size={21} color={tint} strokeWidth={1.9} /></View>
-            <Text style={[styles.rowLabel, { color: tint }]} numberOfLines={1}>{label}</Text>
-            {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
-            {trailing ?? (!hideChevron && <ChevronRight size={20} color={colors.textSecondary} style={styles.rowChevron} />)}
-        </Wrapper>
-    );
-}
-
-function Divider({ styles }) {
-    return <View style={styles.divider} />;
-}
-
-const getStyles = (colors, isDark) => StyleSheet.create({
+const getStyles = (colors, t) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    scroll: { paddingHorizontal: SCREEN_GUTTER, paddingBottom: 60 },
 
-    pageTitle: { fontSize: 20, fontWeight: "800", color: colors.text, textAlign: "center", marginBottom: 18, letterSpacing: -0.3 },
-
-    // Profile card
-    profileCard: {
-        flexDirection: "row", alignItems: "center", gap: 16,
-        backgroundColor: colors.card, borderRadius: 22, padding: 16,
-        borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
-        shadowColor: "#0F172A", shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: isDark ? 0 : 0.06, shadowRadius: 16, elevation: isDark ? 0 : 2,
-        marginBottom: 26,
-    },
-    avatar: { width: 76, height: 76, borderRadius: 38 },
-    avatarPh: {
-        width: 76, height: 76, borderRadius: 38, backgroundColor: colors.primaryLight,
+    // Identity card — same surface as the group cards on the Groups tab
+    // Identity: sits straight on the canvas like the rows below (no card)
+    idCard: { paddingHorizontal: SCREEN_GUTTER, marginBottom: 10 },
+    idTop: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 6 },
+    avatar: { width: 64, height: 64, borderRadius: 32 },
+    avatarFallback: { backgroundColor: t.ink, alignItems: "center", justifyContent: "center" },
+    avatarInitial: { fontSize: 24, fontWeight: "700", color: t.onInk },
+    idText: { flex: 1, minWidth: 0, gap: 3 },
+    nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    name: { fontSize: 22, fontWeight: "700", color: colors.text, letterSpacing: -0.3, flexShrink: 1 },
+    email: { ...TYPE.secondary, color: colors.textSecondary },
+    idBottom: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 10 },
+    payIcon: {
+        width: 40, height: 40, borderRadius: 20,
         alignItems: "center", justifyContent: "center",
+        backgroundColor: t.fillStrong,
     },
-    profileText: { flex: 1, minWidth: 0 },
-    profileName: { fontSize: 20, fontWeight: "800", color: colors.text, letterSpacing: -0.3 },
-    profileEmail: { fontSize: 13.5, color: colors.textSecondary, marginTop: 4 },
-
-    // Section
-    sectionLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, marginBottom: 10, marginLeft: 4 },
-    card: {
-        backgroundColor: colors.card, borderRadius: 22,
-        borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
-        paddingHorizontal: 16, marginBottom: 26,
-        shadowColor: "#0F172A", shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: isDark ? 0 : 0.05, shadowRadius: 16, elevation: isDark ? 0 : 2,
+    payText: { flex: 1, minWidth: 0, gap: 2 },
+    payLabel: { ...TYPE.meta, color: colors.textSecondary },
+    payValue: { fontSize: 15, fontWeight: "600", color: colors.text, letterSpacing: -0.1 },
+    payHint: { ...TYPE.secondary, color: colors.textSecondary },
+    chip: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        height: 36,
+        paddingHorizontal: 14,
+        borderRadius: R.pill,
+        backgroundColor: t.fillStrong,
     },
+    chipInk: { backgroundColor: t.ink },
+    chipText: { ...TYPE.secondary, fontWeight: "600", color: colors.text },
 
-    // Row
-    row: { flexDirection: "row", alignItems: "center", paddingVertical: 15 },
-    rowIcon: { width: 30, alignItems: "flex-start", justifyContent: "center" },
-    rowLabel: { flex: 1, fontSize: 16, fontWeight: "500", color: colors.text },
-    rowValue: { fontSize: 14, color: colors.textSecondary, marginRight: 8 },
-    rowChevron: {},
-    divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 30 },
+    // Row groups: rows sit straight on the canvas under a lined heading (no cards)
+    group: { marginBottom: 10 },
+    row: { paddingVertical: 8 },
+    rowTrailing: { flexDirection: "row", alignItems: "center", gap: 8, maxWidth: "50%" },
+    rowValue: { ...TYPE.secondary, color: colors.textSecondary, flexShrink: 1 },
 
-    version: { textAlign: "center", fontSize: 12, color: colors.textSecondary, marginTop: 6 },
+    logout: { marginHorizontal: SCREEN_GUTTER, marginTop: 10 },
+    version: { ...TYPE.meta, color: colors.textSecondary, textAlign: "center", marginTop: 16 },
 });

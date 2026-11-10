@@ -79,8 +79,8 @@ describe("GroupBalanceSection - settlement button gating", () => {
         onCancelSettlement={noop}
       />
     );
-    expect(screen.getByText("I've Paid ₹500")).toBeTruthy();
-    expect(screen.queryByText("Mark ₹500 as Received")).toBeNull();
+    expect(screen.getByText("I've Paid")).toBeTruthy();
+    expect(screen.queryByText("Received")).toBeNull();
   });
 
   test("the creditor sees 'Mark as Received', not the debtor's button", async () => {
@@ -95,8 +95,8 @@ describe("GroupBalanceSection - settlement button gating", () => {
         onCancelSettlement={noop}
       />
     );
-    expect(screen.getByText("Mark ₹500 as Received")).toBeTruthy();
-    expect(screen.queryByText("I've Paid ₹500")).toBeNull();
+    expect(screen.getByText("Received")).toBeTruthy();
+    expect(screen.queryByText("I've Paid")).toBeNull();
   });
 
   test("a third party sees neither action - just the disclaimer", async () => {
@@ -112,8 +112,8 @@ describe("GroupBalanceSection - settlement button gating", () => {
       />
     );
     expect(screen.getByText("Only the people involved can record this settlement")).toBeTruthy();
-    expect(screen.queryByText("I've Paid ₹500")).toBeNull();
-    expect(screen.queryByText("Mark ₹500 as Received")).toBeNull();
+    expect(screen.queryByText("I've Paid")).toBeNull();
+    expect(screen.queryByText("Received")).toBeNull();
   });
 
   test("REGRESSION (task #8): meId stuck at null hides the button from the actual debtor too", async () => {
@@ -132,7 +132,7 @@ describe("GroupBalanceSection - settlement button gating", () => {
       />
     );
     expect(screen.getByText("Only the people involved can record this settlement")).toBeTruthy();
-    expect(screen.queryByText("I've Paid ₹500")).toBeNull();
+    expect(screen.queryByText("I've Paid")).toBeNull();
   });
 
   test("clicking 'I've Paid' opens the method form and submits with the chosen method + note", async () => {
@@ -154,7 +154,7 @@ describe("GroupBalanceSection - settlement button gating", () => {
     // line reads the resulting DOM/state - needed under RTL v14 + React 19's
     // async act semantics, where a bare `fireEvent.press` isn't guaranteed to
     // have committed by the very next synchronous line.
-    await act(() => { fireEvent.press(screen.getByText("I've Paid ₹500")); });
+    await act(() => { fireEvent.press(screen.getByText("I've Paid")); });
     await act(() => { fireEvent.press(screen.getByText("Online")); });
     await act(() => {
       fireEvent.changeText(screen.getByPlaceholderText("Add a note (optional) — e.g. UPI ref no."), "UPI ref 123");
@@ -172,7 +172,7 @@ describe("GroupBalanceSection - settlement button gating", () => {
         meId="debtor-1"
       />
     );
-    expect(screen.queryByText("I've Paid ₹500")).toBeNull();
+    expect(screen.queryByText("I've Paid")).toBeNull();
     expect(screen.getByText("Suggestion #1")).toBeTruthy();
   });
 });

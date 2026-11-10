@@ -1,5 +1,6 @@
 import { Block, ListRow, RoundButton, SectionLabel, useDesign } from "@/components/ui/Design";
 import { Text } from "@/components/ui/Typography";
+import { flatSurface } from "@/constants/design";
 import { api } from "@/lib/api";
 import { Alert } from "@/lib/alert";
 import { Check, X } from "lucide-react-native";
@@ -20,7 +21,7 @@ export default function PendingMembers({ groupId, pending, onChanged }) {
         }
     };
     const avatar = (name) => (
-        <View style={[styles.avatar, { backgroundColor: t.surfaceAlt }]}>
+        <View style={[styles.avatar, { backgroundColor: t.outline }]}>
             <Text style={{ fontWeight: "700", color: colors.textSecondary }}>{(name || "?").charAt(0).toUpperCase()}</Text>
         </View>
     );
@@ -30,7 +31,7 @@ export default function PendingMembers({ groupId, pending, onChanged }) {
             {requests.length > 0 && (
                 <>
                     <SectionLabel>Join requests ({requests.length})</SectionLabel>
-                    <Block padded={false}>
+                    <Block padded={false} style={flatSurface}>
                         {requests.map((r) => (
                             <ListRow key={r._id} leading={avatar(r.user?.name)} title={r.user?.name} subtitle={r.user?.email}
                                 trailing={
@@ -52,7 +53,7 @@ export default function PendingMembers({ groupId, pending, onChanged }) {
             {invites.length > 0 && (
                 <>
                     <SectionLabel>Waiting to accept ({invites.length})</SectionLabel>
-                    <Block padded={false}>
+                    <Block padded={false} style={flatSurface}>
                         {invites.map((r) => (
                             <ListRow key={r._id} leading={avatar(r.user?.name)} title={r.user?.name} subtitle={r.user?.email}
                                 trailing={

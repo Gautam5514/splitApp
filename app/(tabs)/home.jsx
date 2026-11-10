@@ -1,4 +1,5 @@
 import { DonutRing, SpendingAreaChart } from "@/components/Charts";
+import AddExpenseModal from "@/components/AddExpenseModal";
 import CoinBadge from "@/components/CoinBadge";
 import AutopilotButton from "@/components/autopilot/AutopilotButton";
 import InviteModal from "@/components/InviteModal";
@@ -300,6 +301,8 @@ export default function Dashboard() {
     // A group made in the create-group wizard should show up when we come back.
     useFocusEffect(useCallback(() => { if (token) { refresh(); fetchQuickSplits(); } }, [token])); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Quick "+" on a group card opens Add expense right here, no need to open the group.
+    const [expenseGroup, setExpenseGroup] = useState(null);
     const openGroup = (id) => router.push({ pathname: "/groups/[id]", params: { id, returnTo: "home" } });
     const { totalOwe, totalOwed } = oweSummary;
 
@@ -458,11 +461,11 @@ export default function Dashboard() {
                 {activeGroups.length > 0 ? (
                     <View style={styles.cardList}>
                         {activeGroups.slice(0, HOME_GROUP_LIMIT).map((g, i) => (
-                            <GroupCard key={g._id} group={g} index={i} styles={styles} colors={colors} onOpen={openGroup} />
+                            <GroupCard key={g._id} group={g} index={i} styles={styles} colors={colors} onOpen={openGroup} onAddExpense={setExpenseGroup} />
                         ))}
                     </View>
                 ) : (
-                    <Block style={styles.emptyCard}>
+                    <Block style={[styles.emptyCard, styles.flatBlock]}>
                         <View style={styles.emptyIconBox}><Users size={28} color={colors.primary} /></View>
                         <Text style={styles.emptyTitle}>No active trips yet</Text>
                         <Text style={styles.emptyText}>Create your first group and start splitting expenses with friends.</Text>
@@ -478,7 +481,7 @@ export default function Dashboard() {
                 {/* Recent Activity */}
                 <SectionLabel>Recent Activity</SectionLabel>
                 {recentExpenses.length > 0 ? (
-                    <Block padded={false} style={styles.recentBlock}>
+                    <Block padded={false} style={styles.flatBlock}>
                         {recentExpenses.map((exp, i) => (
                             <RecentExpenseRow
                                 key={exp.id}
@@ -491,7 +494,7 @@ export default function Dashboard() {
                         ))}
                     </Block>
                 ) : (
-                    <Block style={styles.emptyCard}>
+                    <Block style={[styles.emptyCard, styles.flatBlock]}>
                         <View style={[styles.emptyIconBox, { backgroundColor: "rgba(245,158,11,0.12)" }]}>
                             <Receipt size={26} color="#F59E0B" />
                         </View>
@@ -516,7 +519,7 @@ export default function Dashboard() {
                         >
                             Recent Quick Splits
                         </SectionLabel>
-                        <Block padded={false} style={styles.recentBlock}>
+                        <Block padded={false} style={styles.flatBlock}>
                             {quickSplits.map((qs, i) => (
                                 <View
                                     key={qs.id}
@@ -559,7 +562,7 @@ export default function Dashboard() {
                 {showCharts && hasTrends && (
                     <>
                         <SectionLabel>Spending Trajectory</SectionLabel>
-                        <Block>
+                        <Block style={styles.flatBlock}>
                             <View style={styles.cardHeadRow}>
                                 <Landmark size={16} color={CHART_CYAN} />
                                 <Text style={styles.cardSub}>Monthly breakdown of travel settlements this year</Text>
@@ -573,7 +576,7 @@ export default function Dashboard() {
                 {showCharts && pieData.length > 0 && (
                     <>
                         <SectionLabel>Expense Allocations</SectionLabel>
-                        <Block>
+                        <Block style={styles.flatBlock}>
                             <View style={styles.cardHeadRow}>
                                 <PieIcon size={16} color="#14B8A6" />
                                 <Text style={styles.cardSub}>Distribution of shares by top categories</Text>
@@ -608,6 +611,13 @@ export default function Dashboard() {
             </ScrollView>
 
             <InviteModal groupId={inviteGroupId} visible={!!inviteGroupId} onClose={() => setInviteGroupId(null)} />
+            {expenseGroup && (
+                <AddExpenseModal
+                    group={expenseGroup}
+                    onClose={() => setExpenseGroup(null)}
+                    onSuccess={() => refresh()}
+                />
+            )}
         </View>
     );
 }
@@ -641,7 +651,7 @@ const CARD_GRADIENTS = [
 // Member faces: up to 4 shown as-is; with more than 4, show 3 faces + "+N".
 const MAX_FACES = 4;
 
-function GroupCard({ group, index, styles, colors, onOpen }) {
+function GroupCard({ group, index, styles, colors, onOpen, onAddExpense }) {
     const members = group.members || [];
     const [from, to] = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
     const GroupIcon = getGroupIcon(group.icon);
@@ -697,7 +707,19 @@ function GroupCard({ group, index, styles, colors, onOpen }) {
                 )}
             </View>
 
-            {/* The one action: open the group */}
+            {/* Quick add expense without opening the group */}
+            <TouchableOpacity
+                onPress={() => onAddExpense(group)}
+                style={styles.addExpenseBtn}
+                activeOpacity={0.8}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Add expense to ${group.name}`}
+            >
+                <Plus size={18} color={colors.primary} strokeWidth={2.6} />
+            </TouchableOpacity>
+
+            {/* Open the group */}
             <TouchableOpacity
                 onPress={open}
                 style={styles.openBtn}
@@ -799,14 +821,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     statRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
     statCard: {
         flex: 1, borderRadius: 18, padding: 15,
-        backgroundColor: colors.card,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(15,23,42,0.08)",
-        shadowColor: "#0F172A",
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: isDark ? 0 : 0.05,
-        shadowRadius: 12,
-        elevation: isDark ? 0 : 2,
+        backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.035)",
+        borderWidth: 0,
+        shadowOpacity: 0,
+        elevation: 0,
     },
     statTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
     statLabel: { fontSize: 10.5, color: colors.textSecondary, fontWeight: "600", letterSpacing: 0.2 },
@@ -859,6 +877,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     faceText: { color: "#fff", fontSize: 10, fontWeight: "800" },
     faceMore: { backgroundColor: isDark ? "#3A3F47" : "#D8DEE8" },
     faceMoreText: { color: colors.text, fontSize: 9.5, fontWeight: "800" },
+    addExpenseBtn: {
+        width: 38, height: 38, borderRadius: 19,
+        alignItems: "center", justifyContent: "center",
+        backgroundColor: colors.primaryLight,
+        marginRight: -4, // sit closer to the open arrow than the card gap
+    },
     openBtn: {
         width: 38, height: 38, borderRadius: 19,
         alignItems: "center", justifyContent: "center",
@@ -874,6 +898,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
     // Recent activity
     recentBlock: {},
+    flatBlock: {
+        backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.035)",
+        borderWidth: 0, shadowOpacity: 0, elevation: 0,
+    },
     recentRow: {
         flexDirection: "row", alignItems: "center", gap: 12,
         paddingHorizontal: 14, paddingVertical: 12,

@@ -1,7 +1,7 @@
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
 import { Alert } from "@/lib/alert";
 import { SCREEN_GUTTER } from "@/constants/layout";
-import { surfaceStyle } from "@/constants/design";
+import { flatFill, flatSurface, SIZE, TYPE } from "@/constants/design";
 import AddExpenseModal from "@/components/AddExpenseModal";
 import { RowListSkeleton, StatCardsSkeleton } from "@/components/ui/Skeleton";
 import GroupBalanceSection from "@/components/GroupBalanceSection";
@@ -17,6 +17,7 @@ import { Block, IconCircle, ListRow, PillButton, RoundButton, ScreenHeader, Sect
 import AutopilotButton from "@/components/autopilot/AutopilotButton";
 import { useAuth } from "@/context/AuthContext";
 import GroupAvatarSheet from "@/components/group/GroupAvatarSheet";
+import TierBadge from "@/components/ui/TierBadge";
 import { api } from "@/lib/api";
 import { useRealtime } from "@/lib/useRealtime";
 import { router, useLocalSearchParams } from "expo-router";
@@ -33,7 +34,7 @@ import {
     Gift,
     Home,
     Camera,
-    MoreVertical,
+    MoreHorizontal,
     NotebookPen,
     Plus,
     Receipt,
@@ -42,7 +43,6 @@ import {
     UserPlus,
     Users,
     Utensils,
-    Wallet2,
     X
 } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
@@ -106,6 +106,7 @@ export default function GroupDetailPage() {
     const [showAddPeople, setShowAddPeople] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const [showMembers, setShowMembers] = useState(false);
+    const [showAllExpenses, setShowAllExpenses] = useState(false);
 
     const handleCloseExpenseModal = () => {
         setShowExpenseModal(false);
@@ -375,7 +376,7 @@ export default function GroupDetailPage() {
     const handleMarkCompleted = () => {
         Alert.alert(
             "Mark as completed?",
-            "This trip will move to your completed trips. You can still view it, but it won't show as active anymore.",
+            "This group will move to Completed. You can still open it any time.",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -387,7 +388,7 @@ export default function GroupDetailPage() {
                         } catch (e) {
                             Alert.alert(
                                 "Error",
-                                e?.response?.data?.message || "Could not mark trip as completed. Please try again."
+                                e?.response?.data?.message || "Could not mark the group as completed. Please try again."
                             );
                         }
                     },
@@ -398,8 +399,8 @@ export default function GroupDetailPage() {
 
     const handleDeleteTrip = () => {
         Alert.alert(
-            "Delete trip?",
-            "This will delete the trip with its expenses, notes, and group messages.",
+            "Delete group?",
+            "This will delete the group with its expenses, notes, and group messages.",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -412,7 +413,7 @@ export default function GroupDetailPage() {
                         } catch (e) {
                             Alert.alert(
                                 "Error",
-                                e?.response?.data?.message || "Could not delete trip. Please try again."
+                                e?.response?.data?.message || "Could not delete the group. Please try again."
                             );
                         }
                     },
@@ -448,8 +449,9 @@ export default function GroupDetailPage() {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
-                <View style={{ paddingTop: 16 }}>
+            <SafeAreaView style={styles.container} edges={["top"]}>
+                <ScreenHeader flat back onBack={goBack} title=" " />
+                <View>
                     <StatCardsSkeleton />
                     <RowListSkeleton count={5} />
                 </View>
@@ -461,7 +463,7 @@ export default function GroupDetailPage() {
         const isNetworkError = loadError === "network";
         return (
             <SafeAreaView style={styles.container} edges={["top"]}>
-                <ScreenHeader back onBack={goBack} title="Group" />
+                <ScreenHeader flat back onBack={goBack} title="Group" />
                 <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>
                         {isNetworkError
@@ -477,15 +479,35 @@ export default function GroupDetailPage() {
         );
     }
 
-    const typeMeta = groupTypeMeta(group.groupType);
     const currency = group.settings?.currency || "INR";
+    const members = group.members || [];
+    const typeMeta = groupTypeMeta(group.groupType || "general");
+    const typeLabel = typeMeta.key === "general" ? "Group" : typeMeta.label;
     const headerSubtitle = group.isCompleted
         ? "Completed"
-        : `${typeMeta.label} · ${group.members?.length || 0} member${group.members?.length === 1 ? "" : "s"}`;
+        : `${typeLabel} · ${members.length} ${members.length === 1 ? "member" : "members"}`;
+
+    // Balance per member (+ = gets money back, - = owes). null until loaded.
+    const balanceOf = (id) => {
+        if (!balances) return null;
+        const row = (balances.balances || []).find((x) => String(x.userId) === String(id));
+        return Number(row?.balance) || 0;
+    };
+    const myNet = balances && userId ? balanceOf(userId) : undefined;
+
+    // Newest first when the API sends a date; otherwise keep the API's order.
+    const whenOf = (e) => new Date(e.date || e.createdAt || 0).getTime() || 0;
+    const sortedExpenses = [...expenses].sort((x, y) => whenOf(y) - whenOf(x));
+    const visibleExpenses = showAllExpenses ? sortedExpenses : sortedExpenses.slice(0, EXPENSE_PREVIEW);
+    const dayLabel = (e) => {
+        const ts = whenOf(e);
+        return ts ? new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "";
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
             <ScreenHeader
+                flat
                 back
                 onBack={goBack}
                 title={group.name}
@@ -493,20 +515,9 @@ export default function GroupDetailPage() {
                 right={
                     <View style={styles.headerActions}>
                         {!group.isCompleted && <AutopilotButton size={46} groupId={group._id} />}
-                        {isCreator ? (
-                            <RoundButton label="Group actions" onPress={() => setShowMenu(true)}>
-                                <MoreVertical size={18} color={colors.text} />
-                            </RoundButton>
-                        ) : group.isCompleted ? (
-                            <View style={styles.completedBadge}>
-                                <CheckCircle2 size={12} color="#10B981" />
-                                <Text style={styles.completedBadgeText}>Completed</Text>
-                            </View>
-                        ) : (
-                            <RoundButton label="Leave group" onPress={handleLeave}>
-                                <LogOut size={18} color={colors.error} />
-                            </RoundButton>
-                        )}
+                        <RoundButton flat label="Group actions" onPress={() => setShowMenu(true)}>
+                            <MoreHorizontal size={20} color={colors.text} />
+                        </RoundButton>
                     </View>
                 }
             />
@@ -516,31 +527,54 @@ export default function GroupDetailPage() {
                 contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomSpacing }]}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Type card (Trip budget / Roommates month / Business receipts) */}
+                {/* 1 · Where I stand + the group's numbers */}
                 <GroupTypeCard
                     group={group}
                     summary={summary}
                     isCreator={isCreator}
+                    myNet={myNet}
                     onOpenSettings={() => setShowSettings(true)}
                     onEditLook={() => setShowIconPicker(true)}
                 />
 
-                {/* Two quick actions under the type card */}
+                {/* 2 · The one main action (+ who's in the group) */}
                 <View style={styles.quickRow}>
-                    <PillButton
-                        variant="secondary"
-                        onPress={() => setShowMembers(true)}
-                        icon={<Users size={16} color={colors.text} />}
-                        label={`Members (${group.members?.length || 0})`}
-                        style={styles.quickBtn}
-                    />
-                    <PillButton
-                        variant="primary"
+                    <TouchableOpacity
                         onPress={() => setShowExpenseModal(true)}
-                        icon={<Wallet2 size={16} color={t.onInk} />}
-                        label="Add Expense"
-                        style={styles.quickBtn}
-                    />
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel="Add Expense"
+                        style={styles.addExpenseBtn}
+                    >
+                        <Plus size={19} color={t.onInk} strokeWidth={2.8} />
+                        <Text style={styles.addExpenseText}>Add Expense</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={() => setShowMembers(true)}
+                        activeOpacity={0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Members (${members.length})`}
+                        style={styles.membersChip}
+                    >
+                        <View style={styles.faces}>
+                            {members.slice(0, 3).map((m, i) => (
+                                <View key={m._id || i} style={[styles.face, i > 0 && styles.faceOverlap]}>
+                                    {m.photoURL ? (
+                                        <Image source={{ uri: m.photoURL }} style={styles.faceImg} />
+                                    ) : (
+                                        <Text style={styles.faceText}>{(m.name || m.email || "?").charAt(0).toUpperCase()}</Text>
+                                    )}
+                                </View>
+                            ))}
+                            {!members.length && (
+                                <View style={[styles.face, styles.faceEmpty]}>
+                                    <Users size={14} color={colors.textSecondary} />
+                                </View>
+                            )}
+                        </View>
+                        {members.length > 3 ? <Text style={styles.membersMore}>+{members.length - 3}</Text> : null}
+                    </TouchableOpacity>
                 </View>
 
                 {isCreator && (
@@ -551,71 +585,9 @@ export default function GroupDetailPage() {
                     />
                 )}
 
-                {/* Member Expenses Summary */}
-                <SectionLabel>Member Expenses</SectionLabel>
-
-                {!expensesLoaded ? (
-                    <RowListSkeleton count={3} />
-                ) : expenses.length === 0 ? (
-                    <Block>
-                        <View style={styles.emptyExpensesContainer}>
-                            <IconCircle size={48}>
-                                <Receipt size={22} color={colors.primary} />
-                            </IconCircle>
-                            <Text style={styles.emptyTitle}>No expenses yet</Text>
-                            <Text style={styles.emptyText}>
-                                Log your first bill and we&apos;ll split it automatically.
-                            </Text>
-                            <PillButton
-                                variant="primary"
-                                onPress={() => setShowExpenseModal(true)}
-                                icon={<Plus size={16} color={t.onInk} />}
-                                label="Add Expense"
-                                style={styles.emptyExpensesCta}
-                            />
-                        </View>
-                    </Block>
-                ) : (
-                    <Block padded={false} style={styles.listBlock}>
-                        {(group.members || []).map((m) => {
-                            const memberExpenses = expenses.filter(
-                                (e) => String(e.paidBy?._id) === String(m._id)
-                            );
-                            const total = memberExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-                            return (
-                                <ListRow
-                                    key={m._id}
-                                    onPress={() => {
-                                        setSelectedMember({ member: m, memberExpenses });
-                                        setShowMemberExpensesModal(true);
-                                    }}
-                                    leading={
-                                        m.photoURL ? (
-                                            <Image source={{ uri: m.photoURL }} style={styles.avatar} />
-                                        ) : (
-                                            <View style={styles.avatarPlaceholder}>
-                                                <Text style={styles.avatarText}>
-                                                    {m.name ? m.name.charAt(0).toUpperCase() : "U"}
-                                                </Text>
-                                            </View>
-                                        )
-                                    }
-                                    title={m.name || "Unnamed"}
-                                    subtitle={`${memberExpenses.length} ${memberExpenses.length === 1 ? "expense" : "expenses"}`}
-                                    trailing={
-                                        <View style={styles.memberExpenseCardRight}>
-                                            <Text style={styles.memberExpenseTotal}>{formatMoney(total, currency)}</Text>
-                                            <Text style={styles.memberExpenseViewText}>View →</Text>
-                                        </View>
-                                    }
-                                />
-                            );
-                        })}
-                    </Block>
-                )}
-
-                {/* Balance Section */}
+                {/* 3 · Who pays whom (only shows when something is unsettled) */}
                 <GroupBalanceSection
+                    sections="settle"
                     currency={currency}
                     groupName={group.name}
                     balances={balances}
@@ -627,6 +599,127 @@ export default function GroupDetailPage() {
                     onRejectSettlement={handleRejectSettlement}
                     onCancelSettlement={handleCancelSettlement}
                 />
+
+                {/* 4 · Expenses, newest first */}
+                <SectionLabel
+                    line
+                    right={expenses.length > 0 ? <Text style={styles.sectionCount}>{expenses.length}</Text> : null}
+                >
+                    Expenses
+                </SectionLabel>
+
+                {!expensesLoaded ? (
+                    <RowListSkeleton count={3} />
+                ) : expenses.length === 0 ? (
+                    <Block style={styles.emptyBlock}>
+                        <IconCircle size={48} tint={t.fillStrong}>
+                            <Receipt size={22} color={colors.primary} />
+                        </IconCircle>
+                        <Text style={styles.emptyTitle}>No expenses yet</Text>
+                        <Text style={styles.emptyText}>
+                            Tap Add Expense and we&apos;ll split the bill for you.
+                        </Text>
+                    </Block>
+                ) : (
+                    <View style={styles.listGap}>
+                        {visibleExpenses.map((exp) => {
+                            const Icon = categoryIcons[exp.category?.toLowerCase()] || FileText;
+                            const paidByMe = userId && String(exp.paidBy?._id) === String(userId);
+                            const payer = paidByMe ? "You" : (exp.paidBy?.name || "Someone");
+                            const day = dayLabel(exp);
+                            const openReceipt = exp.ocrText
+                                ? () => { setSelectedOcr(exp); setShowOcrModal(true); }
+                                : undefined;
+                            return (
+                                <ListRow
+                                    key={exp._id}
+                                    onPress={openReceipt}
+                                    accessibilityLabel={`${exp.description}, ${formatMoney(exp.amount, currency)}, ${payer} paid${openReceipt ? ", view receipt" : ""}`}
+                                    leading={
+                                        <IconCircle size={44} tint={t.fillStrong}>
+                                            <Icon size={18} color={colors.primary} />
+                                        </IconCircle>
+                                    }
+                                    title={exp.description || "Expense"}
+                                    subtitle={`${payer} paid${day ? ` · ${day}` : ""}`}
+                                    trailing={
+                                        <View style={styles.expenseRight}>
+                                            {exp.ocrText ? <Eye size={15} color={colors.textSecondary} /> : null}
+                                            <Text style={styles.rowAmount}>{formatMoney(exp.amount, currency)}</Text>
+                                        </View>
+                                    }
+                                />
+                            );
+                        })}
+                        {expenses.length > EXPENSE_PREVIEW && (
+                            <TouchableOpacity
+                                onPress={() => setShowAllExpenses((v) => !v)}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                style={styles.showAll}
+                            >
+                                <Text style={styles.showAllText}>
+                                    {showAllExpenses ? "Show less" : `Show all ${expenses.length} expenses`}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
+
+                {/* 5 · Everyone's balance; tap a person to see what they paid for */}
+                {expenses.length > 0 && members.length > 0 && (
+                    <>
+                        <SectionLabel line>Balances</SectionLabel>
+                        <View style={styles.listGap}>
+                            {members.map((m) => {
+                                const memberExpenses = expenses.filter(
+                                    (e) => String(e.paidBy?._id) === String(m._id)
+                                );
+                                const total = memberExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+                                const bal = balanceOf(m._id);
+                                const isUp = bal != null && bal > 0.01;
+                                const isDown = bal != null && bal < -0.01;
+                                const isMe = userId && String(m._id) === String(userId);
+                                return (
+                                    <ListRow
+                                        key={m._id}
+                                        onPress={() => {
+                                            setSelectedMember({ member: m, memberExpenses });
+                                            setShowMemberExpensesModal(true);
+                                        }}
+                                        leading={
+                                            m.photoURL ? (
+                                                <Image source={{ uri: m.photoURL }} style={styles.avatar} />
+                                            ) : (
+                                                <View style={styles.avatarPlaceholder}>
+                                                    <Text style={styles.avatarText}>
+                                                        {m.name ? m.name.charAt(0).toUpperCase() : "U"}
+                                                    </Text>
+                                                </View>
+                                            )
+                                        }
+                                        title={`${m.name || "Unnamed"}${isMe ? " (you)" : ""}`}
+                                        subtitle={`Paid ${formatMoney(total, currency)}`}
+                                        trailing={
+                                            bal == null ? null : (
+                                                <View style={styles.balanceRight}>
+                                                    <Text style={styles.balanceHint}>
+                                                        {isUp ? "gets back" : isDown ? "owes" : "settled"}
+                                                    </Text>
+                                                    {isUp || isDown ? (
+                                                        <Text style={[styles.rowAmount, { color: isUp ? colors.success : colors.error }]}>
+                                                            {formatMoney(Math.round(Math.abs(bal)), currency)}
+                                                        </Text>
+                                                    ) : null}
+                                                </View>
+                                            )
+                                        }
+                                    />
+                                );
+                            })}
+                        </View>
+                    </>
+                )}
 
                 {/* Notepad — only when the creator has enabled it */}
                 {notepadEnabled && <NotepadSection groupId={groupId} />}
@@ -697,6 +790,34 @@ export default function GroupDetailPage() {
                     <View style={[styles.actionSheet, { paddingBottom: sheetBottomPadding }]}>
                         <View style={styles.sheetHandle} />
 
+                        {!isCreator && (
+                            <View style={styles.actionGroup}>
+                                <ActionItem
+                                    styles={styles}
+                                    chevronColor={colors.textSecondary}
+                                    icon={<Users size={19} color={colors.primary} />}
+                                    tint={colors.primaryLight}
+                                    title="Members"
+                                    onPress={() => { setShowMenu(false); setShowMembers(true); }}
+                                    last
+                                />
+                            </View>
+                        )}
+                        {!isCreator && (
+                            <View style={styles.actionGroup}>
+                                <ActionItem
+                                    styles={styles}
+                                    icon={<LogOut size={19} color={colors.error} />}
+                                    tint={isDark ? "rgba(248,113,113,0.16)" : "rgba(239,68,68,0.10)"}
+                                    title="Leave group"
+                                    danger
+                                    onPress={() => { setShowMenu(false); handleLeave(); }}
+                                    last
+                                />
+                            </View>
+                        )}
+
+                        {isCreator && (
                         <View style={styles.actionGroup}>
                             <ActionItem
                                 styles={styles}
@@ -738,12 +859,15 @@ export default function GroupDetailPage() {
                                     icon={<CheckCircle2 size={19} color="#10B981" />}
                                     tint="rgba(16,185,129,0.14)"
                                     title="Mark as completed"
+                                    subtitle="Moves it to the Completed tab. Nothing is deleted."
                                     onPress={() => { setShowMenu(false); handleMarkCompleted(); }}
                                     last
                                 />
                             )}
                         </View>
+                        )}
 
+                        {isCreator && (
                         <View style={styles.actionGroup}>
                             <ActionItem
                                 styles={styles}
@@ -756,6 +880,7 @@ export default function GroupDetailPage() {
                                 last
                             />
                         </View>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -763,18 +888,22 @@ export default function GroupDetailPage() {
             {/* Members list sheet */}
             <Modal visible={showMembers} transparent animationType="slide" onRequestClose={() => setShowMembers(false)}>
                 <View style={styles.modalOverlay}>
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={() => setShowMembers(false)}
+                        accessibilityLabel="Close members"
+                    />
                     <View style={[styles.modalSheet, { paddingBottom: sheetBottomPadding }]}>
                         <View style={styles.sheetHandle} />
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
-                                Members · {group.members?.length || 0}
-                            </Text>
-                            <RoundButton label="Close" size={36} onPress={() => setShowMembers(false)}>
+                            <Text style={styles.modalTitle}>Members</Text>
+                            <RoundButton flat label="Close" size={36} onPress={() => setShowMembers(false)}>
                                 <X size={18} color={colors.textSecondary} />
                             </RoundButton>
                         </View>
                         <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-                            <Block padded={false} style={styles.modalListBlock}>
+                            <Block padded={false} style={styles.plainBlock}>
                                 {(group.members || []).map((m, idx, arr) => (
                                     <View
                                         key={m._id}
@@ -791,9 +920,12 @@ export default function GroupDetailPage() {
                                             </View>
                                         )}
                                         <View style={styles.memberRowText}>
-                                            <Text style={styles.memberName} numberOfLines={1}>
-                                                {m.name || "Unnamed User"}
-                                            </Text>
+                                            <View style={styles.memberNameRow}>
+                                                <Text style={styles.memberName} numberOfLines={1}>
+                                                    {m.name || "Unnamed User"}
+                                                </Text>
+                                                <TierBadge tier={m.eliteTier} />
+                                            </View>
                                             <Text
                                                 style={styles.memberEmail}
                                                 numberOfLines={1}
@@ -809,7 +941,7 @@ export default function GroupDetailPage() {
                                                     <Text style={styles.creatorBadgeText}>Creator</Text>
                                                 </View>
                                             ) : isCreator ? (
-                                                <RoundButton label="Remove member" size={36} onPress={() => handleRemove(m._id, m.name)}>
+                                                <RoundButton flat label="Remove member" size={36} onPress={() => handleRemove(m._id, m.name)}>
                                                     <X size={15} color={colors.textSecondary} />
                                                 </RoundButton>
                                             ) : null}
@@ -823,7 +955,7 @@ export default function GroupDetailPage() {
                                     onPress={() => { setShowMembers(false); setShowAddPeople(true); }}
                                     icon={<UserPlus size={16} color={colors.text} />}
                                     label="Add people"
-                                    style={styles.addPeopleBtn}
+                                    style={[styles.addPeopleBtn, flatFill(t)]}
                                 />
                             )}
                         </ScrollView>
@@ -839,6 +971,12 @@ export default function GroupDetailPage() {
                 onRequestClose={() => setShowMemberExpensesModal(false)}
             >
                 <View style={styles.modalOverlay}>
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={() => setShowMemberExpensesModal(false)}
+                        accessibilityLabel="Close"
+                    />
                     <View style={[styles.modalSheet, { paddingBottom: sheetBottomPadding }]}>
                         <View style={styles.sheetHandle} />
                         {/* Modal Header */}
@@ -860,7 +998,7 @@ export default function GroupDetailPage() {
                                 )}
                                 <View style={styles.modalHeaderCopy}>
                                     <Text style={styles.modalTitle}>
-                                        {selectedMember?.member.name || "Member"}
+                                        Paid by {selectedMember?.member.name || "member"}
                                     </Text>
                                     <Text style={styles.modalSubtitle}>
                                         {selectedMember?.memberExpenses.length}{" "}
@@ -886,7 +1024,7 @@ export default function GroupDetailPage() {
                             ListEmptyComponent={
                                 <View style={styles.modalEmpty}>
                                     <Receipt size={22} color={colors.primary} />
-                                    <Text style={styles.emptyText}>No expenses from this member.</Text>
+                                    <Text style={styles.emptyText}>Hasn&apos;t paid for anything yet.</Text>
                                 </View>
                             }
                             contentContainerStyle={styles.expensesList}
@@ -895,8 +1033,9 @@ export default function GroupDetailPage() {
                                 const Icon = categoryIcons[key] || FileText;
                                 return (
                                     <ListRow
+                                        style={{ paddingHorizontal: 0 }}
                                         leading={
-                                            <IconCircle size={44}>
+                                            <IconCircle size={44} tint={t.fillStrong}>
                                                 <Icon size={18} color={colors.primary} />
                                             </IconCircle>
                                         }
@@ -904,9 +1043,6 @@ export default function GroupDetailPage() {
                                         subtitle={formatMoney(exp.amount, currency)}
                                         trailing={
                                             <View style={styles.expenseRight}>
-                                                <View style={styles.categoryBadge}>
-                                                    <Text style={styles.categoryBadgeText}>{exp.category}</Text>
-                                                </View>
                                                 {exp.ocrText && (
                                                     <RoundButton
                                                         label="View receipt"
@@ -954,6 +1090,9 @@ function ActionItem({ styles, icon, tint, title, subtitle, onPress, danger, last
     );
 }
 
+// Expenses shown before "Show all".
+const EXPENSE_PREVIEW = 6;
+
 const getStyles = (colors, isDark, t) => StyleSheet.create({
     // Compact three-dot action sheet
     actionSheet: {
@@ -968,8 +1107,6 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         borderRadius: 18,
         overflow: "hidden",
         marginBottom: 12,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: colors.border,
     },
     actionItem: {
         flexDirection: "row",
@@ -1009,9 +1146,40 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         marginTop: 2,
     },
 
-    addPeopleBtn: { marginHorizontal: SCREEN_GUTTER, marginTop: 12, marginBottom: 24 },
-    quickRow: { flexDirection: "row", gap: 10, paddingHorizontal: SCREEN_GUTTER, marginBottom: 20 },
-    quickBtn: { flex: 1 },
+    addPeopleBtn: { marginTop: 16, marginBottom: 24 },
+    quickRow: { flexDirection: "row", gap: 10, paddingHorizontal: SCREEN_GUTTER, marginBottom: 24 },
+    addExpenseBtn: {
+        flex: 1, height: SIZE.button, borderRadius: SIZE.button / 2, paddingHorizontal: 12,
+        flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+        backgroundColor: t.ink,
+    },
+    addExpenseText: { fontSize: 16, fontWeight: "700", color: t.onInk, letterSpacing: -0.2 },
+    membersChip: {
+        height: SIZE.button, borderRadius: SIZE.button / 2, paddingHorizontal: 8,
+        flexDirection: "row", alignItems: "center", gap: 6,
+        backgroundColor: t.fillStrong,
+    },
+    faces: { flexDirection: "row", alignItems: "center" },
+    face: {
+        width: 38, height: 38, borderRadius: 19, overflow: "hidden",
+        alignItems: "center", justifyContent: "center",
+        backgroundColor: isDark ? "#3A3A3C" : "#D5D8DE",
+        borderWidth: 2, borderColor: colors.background,
+    },
+    faceOverlap: { marginLeft: -14 },
+    faceImg: { width: "100%", height: "100%" },
+    faceText: { color: colors.text, fontSize: 14, fontWeight: "700" },
+    faceEmpty: { backgroundColor: "transparent", borderWidth: 0 },
+    membersMore: { ...TYPE.secondary, fontWeight: "700", color: colors.text, marginRight: 6 },
+    sectionCount: { ...TYPE.secondary, color: colors.textSecondary },
+    listGap: { marginBottom: 20 },
+    rowAmount: { fontSize: 16, fontWeight: "700", color: colors.text, letterSpacing: -0.2 },
+    showAll: { paddingHorizontal: SCREEN_GUTTER, paddingVertical: 12 },
+    showAllText: { ...TYPE.secondary, fontWeight: "600", color: colors.text },
+    balanceRight: { alignItems: "flex-end", gap: 2 },
+    balanceHint: { ...TYPE.meta, color: colors.textSecondary },
+    emptyBlock: { ...flatFill(t), alignItems: "center", paddingVertical: 28 },
+    plainBlock: { ...flatSurface, paddingVertical: 0 },
     container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -1040,39 +1208,11 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         alignSelf: "stretch",
     },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-    completedBadge: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        backgroundColor: "#D1FAE5",
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 999,
-    },
-    completedBadgeText: {
-        fontSize: 11,
-        fontWeight: "700",
-        color: "#10B981",
-    },
-    headerPill: {
-        height: 40,
-        paddingHorizontal: 14,
-    },
-    headerPillText: {
-        fontSize: 14,
-    },
-    listBlock: {
-        paddingVertical: 6,
-    },
-    modalListBlock: {
-        marginHorizontal: 0,
-        paddingVertical: 6,
-    },
     memberRow: {
         flexDirection: "row",
         alignItems: "center",
         gap: 14,
-        paddingHorizontal: 14,
+        paddingHorizontal: 0,
         paddingVertical: 13,
     },
     memberRowDivider: {
@@ -1084,7 +1224,9 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         minWidth: 0,
         gap: 3,
     },
+    memberNameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
     memberName: {
+        flexShrink: 1,
         fontSize: 17,
         fontWeight: "600",
         color: colors.text,
@@ -1105,7 +1247,7 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: t.surfaceAlt,
+        backgroundColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(15,23,42,0.07)",
         justifyContent: "center",
         alignItems: "center",
     },
@@ -1125,18 +1267,10 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         fontWeight: "600",
         color: colors.primary,
     },
-    emptyContainer: {
-        paddingVertical: 24,
-        alignItems: "center",
-    },
     emptyText: {
         fontSize: 14,
         color: colors.textSecondary,
         textAlign: "center",
-    },
-    emptyExpensesContainer: {
-        paddingVertical: 16,
-        alignItems: "center",
     },
     emptyTitle: {
         fontSize: 15,
@@ -1145,9 +1279,6 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         marginTop: 12,
         marginBottom: 4,
     },
-    emptyExpensesCta: {
-        marginTop: 16,
-    },
     expensesList: {
         paddingBottom: 8,
     },
@@ -1155,31 +1286,6 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
-    },
-    categoryBadge: {
-        backgroundColor: t.surfaceAlt,
-        paddingHorizontal: 12,
-        paddingVertical: 5,
-        borderRadius: 999,
-    },
-    categoryBadgeText: {
-        fontSize: 11,
-        fontWeight: "600",
-        color: colors.textSecondary,
-        textTransform: "uppercase",
-    },
-    memberExpenseCardRight: {
-        alignItems: "flex-end",
-        gap: 4,
-    },
-    memberExpenseTotal: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: colors.primary,
-    },
-    memberExpenseViewText: {
-        fontSize: 11,
-        color: colors.textSecondary,
     },
     modalOverlay: {
         flex: 1,
@@ -1220,11 +1326,6 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         flex: 1,
         minWidth: 0,
     },
-    sheetTitleRow: {
-        paddingHorizontal: 0,
-        marginTop: 0,
-        marginBottom: 0,
-    },
     modalTitle: {
         fontSize: 17,
         fontWeight: "700",
@@ -1242,191 +1343,5 @@ const getStyles = (colors, isDark, t) => StyleSheet.create({
         alignItems: "center",
         paddingVertical: 40,
         gap: 12,
-    },
-    widgetCard: {
-        ...surfaceStyle(t),
-        marginHorizontal: SCREEN_GUTTER,
-        marginBottom: 24,
-        borderRadius: 22,
-        overflow: "hidden",
-    },
-    widgetHeaderGradient: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-    },
-    widgetHeaderTitleRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    widgetHeaderTitle: {
-        color: "white",
-        fontSize: 15,
-        fontWeight: "700",
-    },
-    widgetHeaderBadge: {
-        backgroundColor: "rgba(255,255,255,0.25)",
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    widgetHeaderBadgeText: {
-        color: "white",
-        fontSize: 10,
-        fontWeight: "600",
-    },
-    widgetBody: {
-        padding: 16,
-    },
-    widgetSubLabel: {
-        fontSize: 11,
-        color: colors.textSecondary,
-        fontWeight: "600",
-        marginBottom: 6,
-        textTransform: "uppercase",
-        letterSpacing: 0.5,
-    },
-    widgetHighlightValue: {
-        fontSize: 20,
-        fontWeight: "800",
-        color: colors.primary,
-        marginTop: 2,
-    },
-    budgetRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 16,
-    },
-    editRow: {
-        flexDirection: "row",
-        alignItems: "flex-end",
-        marginBottom: 16,
-    },
-    widgetInput: {
-        backgroundColor: t.surfaceAlt,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: t.outline,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        color: colors.text,
-        fontSize: 14,
-        marginTop: 4,
-    },
-    saveBtn: {
-        backgroundColor: t.ink,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 999,
-        justifyContent: "center",
-        alignItems: "center",
-        height: 40,
-    },
-    widgetCta: {
-        width: "100%",
-        marginTop: 12,
-    },
-    editHintText: {
-        fontSize: 12,
-        color: colors.primary,
-        fontWeight: "600",
-    },
-    progressContainer: {
-        marginBottom: 16,
-    },
-    progressLabelRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginBottom: 4,
-    },
-    progressMiniLabel: {
-        fontSize: 11,
-        color: colors.textSecondary,
-    },
-    progressBarBg: {
-        height: 6,
-        backgroundColor: t.surfaceAlt,
-        borderRadius: 3,
-        overflow: "hidden",
-    },
-    progressBarFill: {
-        height: "100%",
-        borderRadius: 3,
-    },
-    gridStats: {
-        flexDirection: "row",
-        gap: 12,
-    },
-    statBox: {
-        flex: 1,
-        backgroundColor: t.surfaceAlt,
-        borderRadius: 16,
-        padding: 14,
-        alignItems: "center",
-    },
-    statLabel: {
-        fontSize: 11,
-        color: colors.textSecondary,
-        marginBottom: 2,
-    },
-    statValue: {
-        fontSize: 13,
-        fontWeight: "700",
-        color: colors.text,
-    },
-    utilityList: {
-        gap: 10,
-    },
-    utilityItem: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        backgroundColor: t.surfaceAlt,
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        borderRadius: 16,
-    },
-    utilityItemLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        flex: 1,
-    },
-    utilityCheckbox: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        borderWidth: 2,
-        borderColor: colors.textSecondary,
-        justifyContent: "center",
-        alignItems: "center",
-    },
-    utilityName: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: colors.text,
-    },
-    utilityStatusLabel: {
-        fontSize: 12,
-        color: "#10B981",
-        fontWeight: "600",
-    },
-    addBillQuickBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        backgroundColor: "#10B981",
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 999,
-    },
-    addBillQuickText: {
-        color: "white",
-        fontSize: 12,
-        fontWeight: "600",
     },
 });

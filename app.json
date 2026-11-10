@@ -30,6 +30,21 @@
       "intentFilters": [
         {
           "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "split.elitecrew.online",
+              "pathPrefix": "/join"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
           "data": [
             {
               "scheme": "splitapp",
@@ -100,10 +115,18 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "SplitEase uses your camera to scan group invite QR codes, snap receipts, and take photos to send in chat.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "SplitEase uses your photo library when you choose a profile photo, receipt, or chat attachment.",
-          "cameraPermission": "SplitEase uses your camera so you can take a photo and send it in a chat, or snap a receipt."
+          "cameraPermission": "SplitEase uses your camera to scan group invite QR codes, snap receipts, and take photos to send in chat."
         }
       ],
       "expo-secure-store",

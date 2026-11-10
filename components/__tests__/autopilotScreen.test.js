@@ -42,7 +42,7 @@ const say = async (text) => { await type("Message Autopilot", text); await press
 test("welcome shortcuts fill an editable draft without sending", async () => {
   await mount();
   await press(byLabel("Split a bill"));
-  expect(byLabel("Message Autopilot").props.value).toBe("Dinner 3600 paid by me, split equally, leave out Rahul");
+  expect(byLabel("Message Autopilot").props.value).toBe("Dinner 3600 paid by me, split equally");
   expect(mockPost).not.toHaveBeenCalled();
 });
 

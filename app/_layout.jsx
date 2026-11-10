@@ -51,6 +51,8 @@ export default function RootLayout() {
           <Stack.Screen name="expense-breakdown" />
           <Stack.Screen name="auth/login" />
           <Stack.Screen name="auth/register" />
+          <Stack.Screen name="join/index" />
+          <Stack.Screen name="join/scan" options={{ animation: "slide_from_bottom" }} />
           <Stack.Screen name="join/[inviteCode]" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="settings" />

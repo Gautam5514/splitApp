@@ -111,7 +111,6 @@ export default function OnboardingScreen() {
               <Text style={styles.brandName}>SplitEase</Text>
             </View>
             <View style={styles.topActions}>
-              <Text style={styles.counter}>{String(index + 1).padStart(2, "0")} / 04</Text>
               {!isLast && (
                 <Pressable
                   accessibilityRole="button"
@@ -128,7 +127,6 @@ export default function OnboardingScreen() {
 
           <View style={[styles.bottomContent, compact && styles.bottomContentCompact]}>
             <View style={styles.eyebrowRow}>
-              <View style={styles.eyebrowLine} />
               <Text style={styles.eyebrow}>{item.eyebrow}</Text>
             </View>
 
@@ -225,17 +223,15 @@ const styles = StyleSheet.create({
   brandIcon: { width: 32, height: 32, borderRadius: 9 },
   brandName: { color: "#FFFFFF", fontSize: 23, fontWeight: "700", letterSpacing: -0.8 },
   topActions: { flexDirection: "row", alignItems: "center", gap: 12 },
-  counter: { color: "rgba(224,240,255,0.72)", fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   skipButton: {
-    minHeight: 34, paddingHorizontal: 14, borderRadius: 17, alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(7,16,36,0.48)", borderWidth: 1, borderColor: "rgba(128,226,247,0.36)",
+    height: 28, paddingHorizontal: 12, borderRadius: 14, alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
   skipButtonPressed: { opacity: 0.72 },
-  skipText: { color: "#DDF8FF", fontSize: 12, fontWeight: "800", letterSpacing: 0.3 },
+  skipText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "600", letterSpacing: 0.1 },
   bottomContent: { marginTop: "auto", paddingBottom: 18 },
   bottomContentCompact: { paddingBottom: 6 },
   eyebrowRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
-  eyebrowLine: { width: 60, height: 2, borderRadius: 2, backgroundColor: "#65DDF5" },
   eyebrow: { color: "#A7CAE2", fontSize: 11, fontWeight: "800", letterSpacing: 2.2 },
   title: { color: "#FFFFFF", fontSize: 40, lineHeight: 45, fontWeight: "800", letterSpacing: -1.9 },
   titleCompact: { fontSize: 34, lineHeight: 39 },

@@ -1,64 +1,58 @@
-import { Block, RoundButton, useDesign } from "@/components/ui/Design";
+import { ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
 import { TYPE } from "@/constants/design";
 import { SCREEN_GUTTER } from "@/constants/layout";
-import { router } from "expo-router";
-import { ChevronLeft } from "lucide-react-native";
 import { ScrollView, StatusBar, StyleSheet, View } from "react-native";
 import { Text } from "@/components/ui/Typography";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+/**
+ * Plain reading page (Terms, Privacy Policy): title, one intro line, then
+ * lined headings with the text straight on the canvas — no cards.
+ * `eyebrow` and `icon` are accepted for compatibility but no longer drawn.
+ */
 export default function AuthInfoPageLayout({
-    eyebrow,
     title,
     description,
-    icon: Icon,
     sections = [],
     asideTitle,
     asideItems = [],
 }) {
-    const { colors, isDark, t } = useDesign();
+    const { colors, isDark } = useDesign();
 
     return (
         <View style={[styles.root, { backgroundColor: colors.background }]}>
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
             <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
-                <View style={styles.header}>
-                    <RoundButton onPress={() => router.back()} label="Back">
-                        <ChevronLeft size={22} color={colors.text} strokeWidth={2.3} />
-                    </RoundButton>
-                </View>
+                <ScreenHeader flat back title={title} />
 
                 <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-                    {Icon && (
-                        <View style={[styles.iconBox, { backgroundColor: t.surfaceAlt }]}>
-                            <Icon size={24} color={colors.primary} />
-                        </View>
-                    )}
-                    {eyebrow && <Text style={[styles.eyebrow, { color: colors.primary }]}>{eyebrow}</Text>}
-                    <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-                    {description && <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text>}
+                    {description ? <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text> : null}
 
                     {sections.map((section) => (
-                        <Block key={section.title} style={styles.card}>
-                            <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
-                            {section.body.map((para, i) => (
-                                <Text key={i} style={[styles.paragraph, { color: colors.textSecondary }]}>
-                                    {para}
-                                </Text>
-                            ))}
-                        </Block>
+                        <View key={section.title}>
+                            <SectionLabel line>{section.title}</SectionLabel>
+                            <View style={styles.body}>
+                                {section.body.map((para, i) => (
+                                    <Text key={i} style={[styles.paragraph, { color: colors.textSecondary }]}>
+                                        {para}
+                                    </Text>
+                                ))}
+                            </View>
+                        </View>
                     ))}
 
                     {asideItems.length > 0 && (
-                        <Block style={styles.card}>
-                            {asideTitle && <Text style={[styles.asideTitle, { color: colors.text }]}>{asideTitle}</Text>}
-                            {asideItems.map((item) => (
-                                <View key={item.label} style={styles.asideRow}>
-                                    <Text style={[styles.asideLabel, { color: colors.textSecondary }]}>{item.label}</Text>
-                                    <Text style={[styles.asideValue, { color: colors.text }]}>{item.value}</Text>
-                                </View>
-                            ))}
-                        </Block>
+                        <View>
+                            <SectionLabel line>{asideTitle || "Summary"}</SectionLabel>
+                            <View style={styles.body}>
+                                {asideItems.map((item) => (
+                                    <View key={item.label} style={styles.asideRow}>
+                                        <Text style={[styles.asideLabel, { color: colors.textSecondary }]}>{item.label}</Text>
+                                        <Text style={[styles.asideValue, { color: colors.text }]}>{item.value}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
                     )}
                 </ScrollView>
             </SafeAreaView>
@@ -68,23 +62,11 @@ export default function AuthInfoPageLayout({
 
 const styles = StyleSheet.create({
     root: { flex: 1 },
-    header: { paddingHorizontal: SCREEN_GUTTER, paddingVertical: 8 },
-    scroll: { paddingHorizontal: SCREEN_GUTTER, paddingBottom: 48 },
-    iconBox: {
-        width: 48, height: 48, borderRadius: 14,
-        alignItems: "center", justifyContent: "center",
-        marginBottom: 14,
-    },
-    eyebrow: {
-        ...TYPE.label, letterSpacing: 2, marginBottom: 8,
-    },
-    title: { ...TYPE.pageTitle },
-    description: { fontSize: 15, lineHeight: 23, marginTop: 10, marginBottom: 8 },
-    card: { marginHorizontal: 0, marginTop: 14, marginBottom: 0, gap: 10 },
-    sectionTitle: { ...TYPE.sectionTitle },
-    paragraph: { fontSize: 14, lineHeight: 22 },
-    asideTitle: { fontSize: 14, fontWeight: "700", marginBottom: 2 },
+    scroll: { paddingBottom: 48 },
+    description: { fontSize: 15, lineHeight: 23, marginHorizontal: SCREEN_GUTTER, marginBottom: 14 },
+    body: { paddingHorizontal: SCREEN_GUTTER, gap: 10, marginBottom: 18 },
+    paragraph: { fontSize: 14.5, lineHeight: 22 },
     asideRow: { gap: 2 },
-    asideLabel: { ...TYPE.label, letterSpacing: 0.5 },
-    asideValue: { fontSize: 14, lineHeight: 20 },
+    asideLabel: { ...TYPE.meta },
+    asideValue: { fontSize: 14.5, lineHeight: 21 },
 });

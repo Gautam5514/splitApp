@@ -19,7 +19,7 @@ export default function GroupPickerSheet({ visible, groups, value, onChange, onC
                     const id = g?._id || "";
                     const selected = id === value;
                     return (
-                        <TouchableOpacity key={id || "all"} onPress={() => { onChange(id); onClose(); }} activeOpacity={0.75} style={[s.row, selected && { backgroundColor: t.surfaceAlt }]} accessibilityRole="button" accessibilityState={{ selected }}>
+                        <TouchableOpacity key={id || "all"} onPress={() => { onChange(id); onClose(); }} activeOpacity={0.75} style={[s.row, selected && { backgroundColor: t.fillStrong }]} accessibilityRole="button" accessibilityState={{ selected }}>
                             {g ? <GroupTypeIcon type={g.groupType} size={34} /> : <View style={s.allIcon}><Layers size={17} color={colors.textSecondary} /></View>}
                             <View style={{ flex: 1 }}>
                                 <Text style={s.name} numberOfLines={1}>{g ? g.name : "All groups"}</Text>
@@ -38,7 +38,7 @@ const getStyles = (colors, t) => StyleSheet.create({
     body: { paddingHorizontal: 12, paddingBottom: 24 },
     heading: { fontSize: 18, fontWeight: "700", color: colors.text, marginHorizontal: 8, marginBottom: 8 },
     row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 10, paddingVertical: 10, borderRadius: R.tile },
-    allIcon: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: t.surfaceAlt },
+    allIcon: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: t.fillStrong },
     name: { fontSize: 15, fontWeight: "600", color: colors.text },
     meta: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
 });

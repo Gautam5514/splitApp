@@ -1,9 +1,9 @@
-import { Block, IconCircle, PillButton, PillInput, ScreenHeader, useDesign } from "@/components/ui/Design";
+import { IconCircle, PillButton, PillInput, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
 import { Alert } from "@/lib/alert";
 import { Text } from "@/components/ui/Typography";
 import { SCREEN_GUTTER } from "@/constants/layout";
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
-import { Mail, MapPin, MessageSquare, Send } from "lucide-react-native";
+import { Mail, Send } from "lucide-react-native";
 import { useState } from "react";
 import {
     KeyboardAvoidingView,
@@ -11,6 +11,7 @@ import {
     Platform,
     ScrollView,
     StyleSheet,
+    TouchableOpacity,
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -47,24 +48,19 @@ export default function ContactScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <ScreenHeader title="Contact Us" back />
+            <ScreenHeader flat back title="Contact us" />
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
-                <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                    <View style={styles.iconWrap}>
-                        <IconCircle size={48}>
-                            <MessageSquare size={24} color={colors.primary} />
-                        </IconCircle>
-                    </View>
-                    <Text style={styles.eyebrow}>Contact</Text>
+                <ScrollView contentContainerStyle={{ paddingBottom: bottomSpacing }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     <Text style={styles.description}>
-                        Tell us what happened and include enough detail for support to understand the group, expense, or account issue.
+                        Tell us what happened. The group name and the expense or invite involved help us sort it out faster.
                     </Text>
 
-                    <Block style={styles.formBlock}>
+                    <SectionLabel line>Your message</SectionLabel>
+                    <View style={styles.section}>
                         <Text style={styles.label}>Name</Text>
                         <PillInput
                             placeholder="Your name"
@@ -81,7 +77,7 @@ export default function ContactScreen() {
                         />
                         <Text style={styles.label}>Message</Text>
                         <PillInput
-                            placeholder="Describe the issue, group name, and anything you already tried."
+                            placeholder="What went wrong, and what you already tried"
                             value={form.message}
                             onChangeText={(t) => setField("message", t)}
                             multiline
@@ -92,21 +88,27 @@ export default function ContactScreen() {
                             icon={<Send size={16} color={colors.onPrimary} />}
                             style={styles.sendBtn}
                         />
-                    </Block>
+                        <Text style={styles.hint}>Opens your mail app with the message ready to send.</Text>
+                    </View>
 
-                    <Block style={styles.infoBlock}>
-                        <Mail size={20} color={colors.primary} />
-                        <Text style={styles.infoTitle}>Email support</Text>
-                        <Text style={styles.paragraph}>{SUPPORT_EMAIL}</Text>
-                    </Block>
-
-                    <Block style={styles.infoBlock}>
-                        <MapPin size={20} color={colors.primary} />
-                        <Text style={styles.infoTitle}>What to include</Text>
-                        <Text style={styles.paragraph}>
-                            Account email, group name, invite link or expense title, and screenshots when useful.
+                    <SectionLabel line>Or email us</SectionLabel>
+                    <View style={styles.section}>
+                        <TouchableOpacity
+                            style={styles.mailRow}
+                            activeOpacity={0.7}
+                            onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {})}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Email ${SUPPORT_EMAIL}`}
+                        >
+                            <IconCircle size={40} tint={colors.primaryLight}>
+                                <Mail size={18} color={colors.text} strokeWidth={2} />
+                            </IconCircle>
+                            <Text style={styles.mailText} numberOfLines={1}>{SUPPORT_EMAIL}</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.hint}>
+                            Include your account email, the group name, and screenshots when useful.
                         </Text>
-                    </Block>
+                    </View>
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -115,14 +117,12 @@ export default function ContactScreen() {
 
 const getStyles = (colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    scroll: { paddingTop: 4, paddingBottom: 48 },
-    iconWrap: { marginHorizontal: SCREEN_GUTTER, marginBottom: 14 },
-    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
-    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 4, marginHorizontal: SCREEN_GUTTER },
-    formBlock: { gap: 8 },
-    label: { fontSize: 13, fontWeight: "700", color: colors.text, marginTop: 6 },
+    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginBottom: 14, marginHorizontal: SCREEN_GUTTER },
+    // The form sits straight on the canvas under a lined heading (no cards)
+    section: { paddingHorizontal: SCREEN_GUTTER, gap: 8, marginBottom: 20 },
+    label: { fontSize: 13.5, fontWeight: "600", color: colors.text, marginTop: 6 },
     sendBtn: { marginTop: 10 },
-    infoBlock: { gap: 6 },
-    infoTitle: { fontSize: 15, fontWeight: "700", color: colors.text, marginTop: 4 },
-    paragraph: { fontSize: 14, lineHeight: 21, color: colors.textSecondary },
+    hint: { fontSize: 13.5, lineHeight: 20, color: colors.textSecondary },
+    mailRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 2 },
+    mailText: { flex: 1, fontSize: 16, fontWeight: "500", color: colors.text },
 });

@@ -9,7 +9,7 @@ import { SIZE, TYPE, R, surfaceStyle, tokens } from "@/constants/design";
 import { SCREEN_GUTTER } from "@/constants/layout";
 import { useTheme } from "@/context/ThemeContext";
 import { router } from "expo-router";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { forwardRef, useMemo } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 
@@ -20,9 +20,12 @@ export function useDesign() {
     return useMemo(() => ({ colors, isDark, t: tokens(colors, isDark) }), [colors, isDark]);
 }
 
-/** 48pt round icon button (surface). `active` → filled ink. */
-export function RoundButton({ onPress, label, children, active, size = SIZE.roundBtn, style, disabled }) {
-    const { t } = useDesign();
+/**
+ * 48pt round icon button (surface). `active` → filled ink.
+ * `flat` → soft tinted circle, no outline/shadow; `tint` overrides its colour.
+ */
+export function RoundButton({ onPress, label, children, active, size = SIZE.roundBtn, style, disabled, flat, tint }) {
+    const { t, isDark } = useDesign();
     return (
         <TouchableOpacity
             onPress={onPress}
@@ -34,6 +37,10 @@ export function RoundButton({ onPress, label, children, active, size = SIZE.roun
             style={[
                 surfaceStyle(t),
                 { width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" },
+                flat && {
+                    backgroundColor: tint || (isDark ? "rgba(255,255,255,0.09)" : "rgba(15,23,42,0.06)"),
+                    borderWidth: 0, shadowOpacity: 0, elevation: 0,
+                },
                 active && { backgroundColor: t.ink, borderColor: t.ink },
                 disabled && { opacity: 0.5 },
                 style,
@@ -48,15 +55,17 @@ export function RoundButton({ onPress, label, children, active, size = SIZE.roun
  * Page header. Tab screens: big title (+ optional right actions).
  * Pushed screens: round back button + title. `subtitle` optional.
  */
-export function ScreenHeader({ title, subtitle, onBack, back = false, right, style }) {
+export function ScreenHeader({ title, subtitle, onBack, back = false, right, style, flat }) {
     const { colors } = useDesign();
     const goBack = onBack || (() => router.back());
     const showBack = back || !!onBack;
     return (
         <View style={[styles.header, style]}>
             {showBack && (
-                <RoundButton onPress={goBack} label="Back" style={styles.backBtn}>
-                    <ChevronLeft size={22} color={colors.text} strokeWidth={2.3} />
+                <RoundButton onPress={goBack} label="Back" style={styles.backBtn} flat={flat}>
+                    {flat
+                        ? <ArrowLeft size={21} color={colors.text} strokeWidth={2.4} />
+                        : <ChevronLeft size={22} color={colors.text} strokeWidth={2.3} />}
                 </RoundButton>
             )}
             <View style={styles.headerText}>
@@ -148,12 +157,13 @@ export function Segmented({ options, value, onChange, style }) {
     );
 }
 
-/** Small uppercase label above a group of rows / a block. */
-export function SectionLabel({ children, right, style }) {
-    const { colors } = useDesign();
+/** Section title above a group of rows / a block. `line` draws a rule after the title. */
+export function SectionLabel({ children, right, style, line }) {
+    const { colors, t } = useDesign();
     return (
-        <View style={[styles.sectionLabelRow, style]}>
+        <View style={[styles.sectionLabelRow, line && styles.sectionLabelLined, style]}>
             <Text style={[TYPE.sectionTitle, { color: colors.text }]}>{children}</Text>
+            {line ? <View style={[styles.sectionLabelRule, { backgroundColor: t.outline }]} /> : null}
             {right}
         </View>
     );
@@ -246,6 +256,9 @@ const styles = StyleSheet.create({
         flexDirection: "row", alignItems: "center", justifyContent: "space-between",
         paddingHorizontal: SCREEN_GUTTER, marginTop: 8, marginBottom: 10,
     },
+
+    sectionLabelLined: { gap: 12, marginBottom: 12 },
+    sectionLabelRule: { flex: 1, height: 1 },
 
     block: { marginHorizontal: SCREEN_GUTTER, marginBottom: 24, borderRadius: R.block, overflow: "hidden" },
     blockPadded: { padding: 16 },

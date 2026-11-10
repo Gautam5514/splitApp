@@ -1,96 +1,235 @@
-import { useBottomSpacing } from "@/hooks/useSafeSpacing";
-import { SCREEN_GUTTER } from "@/constants/layout";
-import { Block, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
-import { useTheme } from "@/context/ThemeContext";
-import { Colors } from "@/constants/theme";
-import { R } from "@/constants/design";
-import { Check, Moon, Sun } from "lucide-react-native";
-import { ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
+import { IconCircle, ListRow, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
+import CoinIcon from "@/components/icons/CoinIcon";
 import { Text } from "@/components/ui/Typography";
+import { R, TYPE } from "@/constants/design";
+import { SCREEN_GUTTER } from "@/constants/layout";
+import { useTheme } from "@/context/ThemeContext";
+import { useBottomSpacing } from "@/hooks/useSafeSpacing";
+import { Alert } from "@/lib/alert";
+import { api } from "@/lib/api";
+import { router } from "expo-router";
+import { Check, Lock, Moon, Sun } from "lucide-react-native";
+import { useEffect, useRef, useState } from "react";
+import { ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const OPTIONS = [
-    { id: "light", label: "White", desc: "Clean and bright", Icon: Sun, iconBg: "#FEF3C7", iconColor: "#F59E0B" },
-    { id: "dark", label: "Black", desc: "Sleek all-black theme", Icon: Moon, iconBg: "#111111", iconColor: "#FFFFFF" },
+const MODES = [
+    { id: "light", label: "White", desc: "Clean and bright", Icon: Sun },
+    { id: "dark", label: "Black", desc: "True black, easy on the eyes", Icon: Moon },
 ];
 
+// What the line under a theme's name says, by how the user can get it.
+const accessLine = (t) =>
+    t.access === "owned" ? "Unlocked"
+    : t.access === "tier" ? "Included with your tier"
+    : t.access === "free-pick" ? "Free with Bronze · pick one"
+    : `${t.price} coins`;
+
 export default function AppearanceScreen() {
-    const { setMode, colors, theme } = useTheme();
-    const { t } = useDesign();
+    const { setMode, theme, accent, setAccent } = useTheme();
+    const { colors, t } = useDesign();
     const bottomSpacing = useBottomSpacing(32);
     const styles = getStyles(colors, t);
+    const isDark = theme === "dark";
 
-    // Only two themes now: light or black(dark).
-    const previewScheme = theme === "dark" ? "dark" : "light";
-    const p = Colors[previewScheme];
+    // Theme shelf from the server: which themes exist, this user's price / access.
+    const [themes, setThemes] = useState(null); // null = loading, [] = none / failed
+    const [coins, setCoins] = useState(null);
+    const [failed, setFailed] = useState(false);
+    const [busy, setBusy] = useState(null); // theme id being unlocked
+    const accentRef = useRef(accent);
+    accentRef.current = accent;
+
+    const applyStore = (data) => {
+        const list = Array.isArray(data?.store?.themes) ? data.store.themes : [];
+        setThemes(list);
+        if (typeof data?.coins === "number") setCoins(data.coins);
+        return list;
+    };
+
+    const load = async () => {
+        try {
+            setFailed(false);
+            const { data } = await api.get("/referrals/me");
+            const list = applyStore(data);
+            // A theme this account can't use (e.g. left over from another login) is dropped.
+            const current = accentRef.current;
+            if (current && data?.store && !list.some((x) => x.key === current.key && x.usable)) setAccent(null);
+        } catch {
+            setThemes([]);
+            setFailed(true);
+        }
+    };
+
+    useEffect(() => {
+        load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const unlock = async (item) => {
+        try {
+            setBusy(item.id);
+            const { data } = await api.post("/referrals/purchase", { itemId: item.id });
+            applyStore(data);
+            await setAccent(item);
+        } catch (e) {
+            Alert.alert("Couldn't unlock", e?.response?.data?.message || "Please try again.");
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const onPick = (item) => {
+        if (busy) return;
+        if (item.usable) return setAccent(item);
+        if (item.access === "free-pick") {
+            return Alert.alert(
+                `Use your free theme on ${item.name}?`,
+                "Bronze members get one theme free. You can unlock the others with coins later.",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Unlock free", onPress: () => unlock(item) },
+                ]
+            );
+        }
+        const short = item.price - (coins ?? 0);
+        if (short > 0) {
+            return Alert.alert(
+                `${short} more coins needed`,
+                `${item.name} costs ${item.price} coins and you have ${coins ?? 0}. Invite friends to earn more.`,
+                [
+                    { text: "Not now", style: "cancel" },
+                    { text: "Invite friends", onPress: () => router.push("/rewards") },
+                ]
+            );
+        }
+        Alert.alert(
+            `Unlock ${item.name}?`,
+            `This uses ${item.price} of your ${coins} coins. It's yours forever.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: `Unlock for ${item.price}`, onPress: () => unlock(item) },
+            ]
+        );
+    };
+
+    const radio = (selected) => (
+        <View style={[styles.radio, selected && styles.radioActive]}>
+            {selected && <Check size={13} color={t.onInk} strokeWidth={3} />}
+        </View>
+    );
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <StatusBar barStyle={theme === "dark" ? "light-content" : "dark-content"} />
-            <ScreenHeader title="Appearance" back />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+            <ScreenHeader flat back title="Appearance" />
 
-            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
-                <Text style={styles.intro}>Choose how SplitEase looks for you. Changes apply instantly.</Text>
-
-                {/* Mode selector */}
-                <SectionLabel>Theme Mode</SectionLabel>
-                <View style={styles.modeList}>
-                    {OPTIONS.map(({ id, label, desc, Icon, iconBg, iconColor }) => {
-                        const selected = theme === id;
-                        return (
-                            <TouchableOpacity
-                                key={id}
-                                style={[styles.modeTile, selected && styles.modeTileActive]}
-                                onPress={() => setMode(id)}
-                                activeOpacity={0.85}
-                            >
-                                <View style={[styles.modeIcon, { backgroundColor: iconBg }]}>
-                                    <Icon size={20} color={iconColor} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.modeLabel}>{label}</Text>
-                                    <Text style={styles.modeDesc}>{desc}</Text>
-                                </View>
-                                <View style={[styles.radio, selected && styles.radioActive]}>
-                                    {selected && <Check size={13} color={t.onInk} strokeWidth={3} />}
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
+            <ScrollView contentContainerStyle={{ paddingBottom: bottomSpacing }} showsVerticalScrollIndicator={false}>
+                <SectionLabel line>Mode</SectionLabel>
+                <View style={styles.group}>
+                    {MODES.map(({ id, label, desc, Icon }) => (
+                        <ListRow
+                            key={id}
+                            style={styles.row}
+                            onPress={() => setMode(id)}
+                            title={label}
+                            subtitle={desc}
+                            accessibilityLabel={`${label} mode${theme === id ? ", selected" : ""}`}
+                            leading={
+                                <IconCircle size={40} tint={t.fillStrong}>
+                                    <Icon size={18} color={colors.text} strokeWidth={2} />
+                                </IconCircle>
+                            }
+                            trailing={radio(theme === id)}
+                        />
+                    ))}
                 </View>
 
-                {/* Live preview */}
-                <SectionLabel right={<Text style={styles.previewTag}>{previewScheme === "dark" ? "DARK" : "LIGHT"}</Text>}>Live Preview</SectionLabel>
-
-                <Block style={[styles.preview, { backgroundColor: p.background }]}>
-                    {/* mini navbar */}
-                    <View style={[styles.pNav, { backgroundColor: p.card, borderColor: p.border }]}>
-                        <Text style={[styles.pBrand, { color: p.text }]}>SplitEase</Text>
-                        <View style={[styles.pDot, { backgroundColor: p.primary }]} />
-                    </View>
-                    {/* balance card */}
-                    <View style={[styles.pBalance, { backgroundColor: p.primary }]}>
-                        <Text style={[styles.pBalanceLabel, { color: p.onPrimary, opacity: 0.8 }]}>Total balance</Text>
-                        <Text style={[styles.pBalanceValue, { color: p.onPrimary }]}>₹4,250</Text>
-                    </View>
-                    {/* rows */}
-                    {[["Beach Dinner", "₹2,400"], ["Taxi Airport", "₹1,200"]].map(([n, a]) => (
-                        <View key={n} style={[styles.pRow, { backgroundColor: p.card, borderColor: p.border }]}>
-                            <Text style={[styles.pRowName, { color: p.text }]}>{n}</Text>
-                            <Text style={[styles.pRowAmt, { color: p.primary }]}>{a}</Text>
+                <SectionLabel
+                    line
+                    right={coins != null ? (
+                        <View style={styles.coinsRight}>
+                            <CoinIcon size={16} />
+                            <Text style={styles.headRight}>{coins} {coins === 1 ? "coin" : "coins"}</Text>
                         </View>
-                    ))}
-                    {/* buttons */}
+                    ) : null}
+                >
+                    Accent colour
+                </SectionLabel>
+                <View style={styles.group}>
+                    <ListRow
+                        style={styles.row}
+                        onPress={() => setAccent(null)}
+                        title="Default"
+                        subtitle="Classic black and white"
+                        accessibilityLabel={`Default accent${!accent ? ", selected" : ""}`}
+                        leading={<View style={[styles.swatch, { backgroundColor: isDark ? "#FFFFFF" : "#141414" }]} />}
+                        trailing={radio(!accent)}
+                    />
+
+                    {(themes || []).map((item) => {
+                        const selected = accent?.key === item.key;
+                        const locked = !item.usable;
+                        return (
+                            <ListRow
+                                key={item.id}
+                                style={styles.row}
+                                onPress={() => onPick(item)}
+                                title={item.name}
+                                subtitle={accessLine(item)}
+                                accessibilityLabel={`${item.name}, ${accessLine(item)}${selected ? ", selected" : ""}`}
+                                leading={
+                                    <View style={[styles.swatch, { backgroundColor: isDark ? item.colors?.dark : item.colors?.light }]} />
+                                }
+                                trailing={
+                                    locked ? (
+                                        <View style={styles.chip}>
+                                            <Lock size={13} color={colors.text} />
+                                            <Text style={styles.chipText}>
+                                                {busy === item.id ? "Unlocking…" : item.access === "free-pick" ? "Get free" : "Unlock"}
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        radio(selected)
+                                    )
+                                }
+                            />
+                        );
+                    })}
+
+                    {themes === null ? (
+                        <Text style={styles.note}>Loading themes…</Text>
+                    ) : failed ? (
+                        <TouchableOpacity onPress={load} activeOpacity={0.7} accessibilityRole="button">
+                            <Text style={styles.note}>
+                                Couldn&apos;t load the themes. <Text style={styles.link}>Try again</Text>
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity onPress={() => router.push("/rewards")} activeOpacity={0.7} accessibilityRole="button">
+                            <Text style={styles.note}>
+                                Themes unlock with coins or your Elite tier. <Text style={styles.link}>Invite friends to earn coins</Text>
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* What it looks like right now */}
+                <SectionLabel line>Preview</SectionLabel>
+                <View style={styles.preview}>
+                    <View style={styles.pBalance}>
+                        <Text style={styles.pBalanceLabel}>You get back</Text>
+                        <Text style={styles.pBalanceValue}>₹4,250</Text>
+                    </View>
                     <View style={styles.pBtnRow}>
-                        <View style={[styles.pBtn, { backgroundColor: p.primary }]}>
-                            <Text style={[styles.pBtnText, { color: p.onPrimary }]}>Settle up</Text>
+                        <View style={styles.pBtn}>
+                            <Text style={styles.pBtnText}>Add Expense</Text>
                         </View>
-                        <View style={[styles.pBtnOutline, { borderColor: p.border }]}>
-                            <Text style={[styles.pBtnOutlineText, { color: p.textSecondary }]}>Remind</Text>
+                        <View style={styles.pBtnOutline}>
+                            <Text style={styles.pBtnOutlineText}>Settle up</Text>
                         </View>
                     </View>
-                </Block>
-
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -98,41 +237,39 @@ export default function AppearanceScreen() {
 
 const getStyles = (colors, t) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    scroll: { paddingTop: 4, paddingBottom: 50 },
-    intro: { fontSize: 13.5, color: colors.textSecondary, lineHeight: 19, marginBottom: 20, paddingHorizontal: SCREEN_GUTTER },
-
-    previewTag: { fontSize: 10, fontWeight: "800", color: colors.textSecondary, letterSpacing: 1 },
-
-    modeList: { gap: 10, paddingHorizontal: SCREEN_GUTTER, marginBottom: 24 },
-    modeTile: {
-        flexDirection: "row", alignItems: "center", gap: 14,
-        backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.outline,
-        borderRadius: R.tile, padding: 14,
+    // Rows sit straight on the canvas under a lined heading (no cards)
+    group: { marginBottom: 12 },
+    row: { paddingVertical: 8 },
+    coinsRight: { flexDirection: "row", alignItems: "center", gap: 5 },
+    headRight: { ...TYPE.secondary, color: colors.textSecondary },
+    swatch: {
+        width: 40, height: 40, borderRadius: 20,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
     },
-    modeTileActive: { borderColor: t.ink },
-    modeIcon: { width: 42, height: 42, borderRadius: R.tile, alignItems: "center", justifyContent: "center" },
-    modeLabel: { fontSize: 15.5, fontWeight: "600", color: colors.text },
-    modeDesc: { fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
     radio: {
         width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: t.outline,
         alignItems: "center", justifyContent: "center",
     },
     radioActive: { backgroundColor: t.ink, borderColor: t.ink },
+    chip: {
+        flexDirection: "row", alignItems: "center", gap: 6,
+        height: 34, paddingHorizontal: 12, borderRadius: R.pill,
+        backgroundColor: t.fillStrong,
+    },
+    chipText: { ...TYPE.secondary, fontWeight: "600", color: colors.text },
+    note: { ...TYPE.secondary, lineHeight: 20, color: colors.textSecondary, paddingHorizontal: SCREEN_GUTTER, marginTop: 8 },
+    link: { fontWeight: "600", color: colors.text },
 
-    preview: { gap: 10 },
-    pNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-    pBrand: { fontSize: 15, fontWeight: "800" },
-    pDot: { width: 22, height: 22, borderRadius: 11 },
-    pBalance: { borderRadius: 12, padding: 12 },
-    pBalanceLabel: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.85)" },
-    pBalanceValue: { fontSize: 22, fontWeight: "800", color: "#fff", marginTop: 2 },
-    pRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-    pRowName: { fontSize: 13.5, fontWeight: "600" },
-    pRowAmt: { fontSize: 13.5, fontWeight: "800" },
-    pBtnRow: { flexDirection: "row", gap: 8, marginTop: 2 },
-    pBtn: { flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: "center" },
-    pBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
-    pBtnOutline: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 10, alignItems: "center" },
-    pBtnOutlineText: { fontWeight: "700", fontSize: 13 },
-
+    preview: { paddingHorizontal: SCREEN_GUTTER, gap: 10 },
+    pBalance: { borderRadius: R.tile, padding: 16, backgroundColor: t.ink },
+    pBalanceLabel: { ...TYPE.secondary, color: t.onInk, opacity: 0.8 },
+    pBalanceValue: { fontSize: 26, fontWeight: "700", color: t.onInk, marginTop: 2, letterSpacing: -0.3 },
+    pBtnRow: { flexDirection: "row", gap: 10 },
+    pBtn: { flex: 1, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: t.ink },
+    pBtnText: { fontSize: 15, fontWeight: "600", color: t.onInk },
+    pBtnOutline: {
+        flex: 1, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center",
+        borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline, backgroundColor: t.surface,
+    },
+    pBtnOutlineText: { fontSize: 15, fontWeight: "600", color: colors.text },
 });

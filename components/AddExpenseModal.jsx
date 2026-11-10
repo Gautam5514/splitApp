@@ -2,11 +2,10 @@ import useKeyboard from "@/hooks/useKeyboard";
 import { Alert } from "@/lib/alert";
 import { useModalBackdropPadding } from "@/hooks/useSafeSpacing";
 import { PillButton, PillInput, RoundButton, useDesign } from "@/components/ui/Design";
-import { TYPE } from "@/constants/design";
 import { api } from "@/lib/api";
 import { categoriesForGroup, categoryMeta } from "@/lib/groupPresets";
 import * as ImagePicker from "expo-image-picker";
-import { ImagePlus, Plus, Trash2, X } from "lucide-react-native";
+import { ImagePlus, Plus, Split, Trash2, Users, Wallet, X } from "lucide-react-native";
 import { useState } from "react";
 import { Animated, Image as RNImage, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Text } from "@/components/ui/Typography";
@@ -120,11 +119,23 @@ export default function AddExpenseModal({ group, onClose, onSuccess, initialDesc
                     <View style={styles.header}>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.title}>Add expense</Text>
-                            <Text style={styles.subtitle} numberOfLines={1}>
-                                You paid · split {splitText} among {memberCount} in <Text style={{ color: colors.text, fontWeight: "600" }}>{group?.name}</Text>
-                            </Text>
+                            <Text style={styles.subtitle} numberOfLines={1}>{group?.name}</Text>
                         </View>
-                        <RoundButton onPress={onClose} label="Close" size={38}><X size={17} color={colors.text} /></RoundButton>
+                        <RoundButton flat onPress={onClose} label="Close" size={38}><X size={17} color={colors.text} /></RoundButton>
+                    </View>
+
+                    {/* How this bill will be recorded, as three quick facts */}
+                    <View style={styles.facts}>
+                        {[
+                            { Icon: Wallet, text: "Paid by you" },
+                            { Icon: Split, text: `Split ${splitText}` },
+                            { Icon: Users, text: `${memberCount} ${memberCount === 1 ? "person" : "people"}` },
+                        ].map(({ Icon, text }) => (
+                            <View key={text} style={styles.fact}>
+                                <Icon size={12} color={colors.textSecondary} />
+                                <Text style={styles.factText}>{text}</Text>
+                            </View>
+                        ))}
                     </View>
 
                     <ScrollView style={styles.form} contentContainerStyle={{ gap: 16, paddingBottom: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -212,16 +223,22 @@ const getStyles = (colors, t) => StyleSheet.create({
         borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
     },
     header: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 },
-    title: { ...TYPE.sectionTitle, color: colors.text },
-    subtitle: { fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
-    form: { paddingHorizontal: 20, paddingTop: 12 },
+    title: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3, color: colors.text },
+    subtitle: { fontSize: 13.5, color: colors.textSecondary, marginTop: 2 },
+    facts: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 20, paddingTop: 10 },
+    fact: {
+        flexDirection: "row", alignItems: "center", gap: 5,
+        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: t.fill,
+    },
+    factText: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
+    form: { paddingHorizontal: 20, paddingTop: 14 },
     label: { fontSize: 12.5, fontWeight: "600", color: colors.textSecondary, marginBottom: 7 },
     error: { fontSize: 12, color: colors.error, marginTop: 5, marginLeft: 4 },
     symbol: { fontSize: 16, fontWeight: "700", color: colors.textSecondary },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
     chip: {
         flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
-        backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline,
+        backgroundColor: t.fill, borderWidth: StyleSheet.hairlineWidth, borderColor: "transparent",
     },
     chipText: { fontSize: 12.5, fontWeight: "600", color: colors.text },
     dropzone: {
@@ -237,7 +254,7 @@ const getStyles = (colors, t) => StyleSheet.create({
     fileText: { flex: 1, fontSize: 13.5, color: colors.text },
     noteBtn: {
         alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7,
-        borderRadius: 999, borderWidth: 1, borderColor: t.outline,
+        borderRadius: 999, backgroundColor: t.fill,
     },
     noteText: { fontSize: 12.5, fontWeight: "600", color: colors.textSecondary },
     footer: { flexDirection: "row", gap: 10, padding: 16, paddingTop: 12 },

@@ -1,4 +1,4 @@
-import { Block, IconCircle, PillButton, ScreenHeader, useDesign } from "@/components/ui/Design";
+import { IconCircle, PillButton, ScreenHeader, SectionLabel, useDesign } from "@/components/ui/Design";
 import { Text } from "@/components/ui/Typography";
 import { SCREEN_GUTTER } from "@/constants/layout";
 import { useBottomSpacing } from "@/hooks/useSafeSpacing";
@@ -67,10 +67,9 @@ export default function HowItWorksScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
-            <ScreenHeader title="How it works" back />
+            <ScreenHeader flat back title="How it works" />
 
-            <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomSpacing }]} showsVerticalScrollIndicator={false}>
-                <Text style={styles.eyebrow}>From sign-up to settled</Text>
+            <ScrollView contentContainerStyle={{ paddingBottom: bottomSpacing }} showsVerticalScrollIndicator={false}>
                 <Text style={styles.description}>
                     Six simple steps take a shared cost from the first expense to a cleared balance.
                 </Text>
@@ -78,28 +77,26 @@ export default function HowItWorksScreen() {
                 {STEPS.map((step, i) => {
                     const Icon = step.icon;
                     return (
-                        <Block key={step.title} style={styles.block}>
-                            <View style={styles.stepHeader}>
-                                <IconCircle size={44}>
-                                    <Icon size={20} color={colors.primary} />
-                                </IconCircle>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.stepEyebrow}>
-                                        Step {i + 1} · {step.eyebrow}
-                                    </Text>
+                        <View key={step.title}>
+                            <SectionLabel line>Step {i + 1}</SectionLabel>
+                            <View style={styles.step}>
+                                <View style={styles.stepHeader}>
+                                    <IconCircle size={40} tint={colors.primaryLight}>
+                                        <Icon size={18} color={colors.text} strokeWidth={2} />
+                                    </IconCircle>
                                     <Text style={styles.stepTitle}>{step.title}</Text>
                                 </View>
+                                <Text style={styles.stepDesc}>{step.desc}</Text>
+                                <View style={styles.points}>
+                                    {step.points.map((point) => (
+                                        <View key={point} style={styles.pointRow}>
+                                            <Check size={15} color={colors.success} />
+                                            <Text style={styles.pointText}>{point}</Text>
+                                        </View>
+                                    ))}
+                                </View>
                             </View>
-                            <Text style={styles.stepDesc}>{step.desc}</Text>
-                            <View style={styles.points}>
-                                {step.points.map((point) => (
-                                    <View key={point} style={styles.pointRow}>
-                                        <Check size={15} color={colors.success} />
-                                        <Text style={styles.pointText}>{point}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        </Block>
+                        </View>
                     );
                 })}
 
@@ -115,16 +112,14 @@ export default function HowItWorksScreen() {
 
 const getStyles = (colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    scroll: { paddingTop: 4, paddingBottom: 48 },
-    eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", color: colors.primary, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
-    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginTop: 4, marginBottom: 8, marginHorizontal: SCREEN_GUTTER },
-    block: { gap: 12 },
+    description: { fontSize: 15, lineHeight: 23, color: colors.textSecondary, marginBottom: 14, marginHorizontal: SCREEN_GUTTER },
+    // Steps sit straight on the canvas under a lined "Step N" heading (no cards)
+    step: { paddingHorizontal: SCREEN_GUTTER, gap: 10, marginBottom: 18 },
     stepHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
-    stepEyebrow: { fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1, color: colors.primary },
-    stepTitle: { fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 2 },
-    stepDesc: { fontSize: 14, lineHeight: 22, color: colors.textSecondary },
+    stepTitle: { flex: 1, fontSize: 16.5, fontWeight: "600", color: colors.text, letterSpacing: -0.2 },
+    stepDesc: { fontSize: 14.5, lineHeight: 22, color: colors.textSecondary },
     points: { gap: 8 },
     pointRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    pointText: { fontSize: 13, color: colors.text },
-    cta: { marginHorizontal: SCREEN_GUTTER, marginTop: 4 },
+    pointText: { fontSize: 13.5, color: colors.text },
+    cta: { marginHorizontal: SCREEN_GUTTER, marginTop: 6 },
 });

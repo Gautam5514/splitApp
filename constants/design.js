@@ -35,10 +35,23 @@ export const tokens = (colors, isDark) => ({
     surface: isDark ? "rgba(255,255,255,0.07)" : "#FFFFFF",
     surfaceAlt: isDark ? "rgba(255,255,255,0.04)" : "#F1F2F5", // tiles inside a block
     outline: isDark ? "rgba(255,255,255,0.10)" : "rgba(20,20,20,0.08)",
+    fill: isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.035)", // borderless tinted surface
+    fillStrong: isDark ? "rgba(255,255,255,0.09)" : "rgba(15,23,42,0.06)", // chips / buttons on the canvas
     shadowOpacity: isDark ? 0 : 0.05,
     text: colors.text,
     muted: colors.textSecondary,
 });
+
+/**
+ * Flat look. Pass to a <Block style> to strip its card chrome:
+ *  `flatSurface`  → content sits straight on the canvas, full width.
+ *  `flatFill(t)`  → keeps the rounded shape but only a borderless tint.
+ */
+export const flatSurface = {
+    backgroundColor: "transparent", borderWidth: 0, shadowOpacity: 0, elevation: 0,
+    marginHorizontal: 0, borderRadius: 0, overflow: "visible",
+};
+export const flatFill = (t) => ({ backgroundColor: t.fill, borderWidth: 0, shadowOpacity: 0, elevation: 0 });
 
 /** Surface style shared by pills, round buttons and blocks. */
 export const surfaceStyle = (t) => ({

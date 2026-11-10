@@ -4,7 +4,7 @@
  */
 import { PillButton, useDesign } from "@/components/ui/Design";
 import { Text, TextInput } from "@/components/ui/Typography";
-import { R, surfaceStyle } from "@/constants/design";
+import { R } from "@/constants/design";
 import { initials, isDeletePlan, isStalled, money, planCurrency, planTotal, STATUS_LABEL } from "@/lib/autopilot";
 import { AlertTriangle, Check, Mail, PiggyBank, RotateCcw, Trash2 } from "lucide-react-native";
 import { useState } from "react";
@@ -112,7 +112,7 @@ export default function RunMessage({ run, nameOf, superseded, busy, onDecide, on
                             style={[{ flex: 1, height: 48 }, del && { backgroundColor: colors.error }]}
                             textStyle={del ? { color: "#fff" } : undefined}
                         />
-                        <PillButton label="Not now" variant="secondary" onPress={() => onDecide(run, "reject")} disabled={busy} style={{ height: 48, paddingHorizontal: 18 }} />
+                        <PillButton label="Not now" variant="secondary" onPress={() => onDecide(run, "reject")} disabled={busy} style={s.notNow} />
                     </View>
                 </View>
             )}
@@ -147,31 +147,33 @@ const OPEN = (status) => ["clarification_required", "waiting_approval"].includes
 const getStyles = (colors, t) => StyleSheet.create({
     mine: { alignSelf: "flex-end", maxWidth: "86%", backgroundColor: t.ink, borderRadius: 20, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 9 },
     theirs: { alignSelf: "flex-start", maxWidth: "100%" },
-    errorBubble: { backgroundColor: colors.error + "14", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 9, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.error + "55" },
+    errorBubble: { backgroundColor: colors.error + "14", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 9 },
     bubbleText: { fontSize: 15, lineHeight: 22, color: colors.text },
     muted: { fontSize: 13, color: colors.textSecondary },
     superseded: { fontSize: 12, fontStyle: "italic", color: colors.textSecondary, paddingHorizontal: 4 },
     inline: { flexDirection: "row", alignItems: "center", gap: 6 },
     row: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
-    chip: { ...surfaceStyle(t), borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 8 },
+    chip: { borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: t.fillStrong },
     chipText: { fontSize: 13, fontWeight: "600", color: colors.text },
-    option: { ...surfaceStyle(t), flexDirection: "row", alignItems: "center", gap: 10, borderRadius: R.tile, paddingHorizontal: 12, paddingVertical: 10 },
+    option: { backgroundColor: t.fill, flexDirection: "row", alignItems: "center", gap: 10, borderRadius: R.tile, paddingHorizontal: 12, paddingVertical: 10 },
     optionAvatar: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
     optionAvatarText: { color: "#fff", fontSize: 11.5, fontWeight: "700" },
     optionLabel: { fontSize: 14, fontWeight: "600", color: colors.text },
     optionHint: { fontSize: 12, color: colors.textSecondary },
     linkText: { fontSize: 13, color: colors.primary, fontWeight: "600", paddingHorizontal: 4 },
-    emailRow: { ...surfaceStyle(t), flexDirection: "row", alignItems: "center", gap: 8, borderRadius: R.pill, paddingLeft: 14, paddingRight: 5, height: 48 },
+    emailRow: { backgroundColor: t.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: t.outline, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: R.pill, paddingLeft: 14, paddingRight: 5, height: 48 },
     emailInput: { flex: 1, fontSize: 14.5, color: colors.text },
     emailBtn: { backgroundColor: t.ink, borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 9 },
     emailBtnText: { color: t.onInk, fontWeight: "700", fontSize: 13 },
     stage: { fontSize: 11.5, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: colors.textSecondary },
-    note: { borderRadius: R.tile, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: t.surfaceAlt },
+    note: { borderRadius: R.tile, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: t.fill },
     noteText: { fontSize: 13, lineHeight: 19, color: colors.text },
     notice: { flexDirection: "row", gap: 8, alignItems: "flex-start", borderRadius: R.tile, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: colors.warning + "18" },
     noticeText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: colors.text },
-    approve: { ...surfaceStyle(t), borderRadius: R.block, padding: 14, gap: 4 },
+    // Sits straight on the canvas under the plan: a title, one line, two buttons.
+    approve: { gap: 3, marginTop: 2 },
+    notNow: { height: 48, paddingHorizontal: 18, backgroundColor: t.fillStrong, borderWidth: 0, shadowOpacity: 0, elevation: 0 },
     approveTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
-    approveSub: { fontSize: 12.5, lineHeight: 18, color: colors.textSecondary, marginBottom: 8 },
+    approveSub: { fontSize: 12.5, lineHeight: 18, color: colors.textSecondary, marginBottom: 10 },
     doneText: { fontSize: 14, fontWeight: "600" },
 });

@@ -5,7 +5,7 @@
 import BottomSheet from "@/components/ui/BottomSheet";
 import { PillButton, PillInput, useDesign } from "@/components/ui/Design";
 import { Text } from "@/components/ui/Typography";
-import { R, surfaceStyle } from "@/constants/design";
+import { R } from "@/constants/design";
 import { editChanges } from "@/lib/autopilot";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
@@ -54,7 +54,7 @@ export default function EditExpenseSheet({ step, onClose, onSave }) {
                     </>
                 )}
                 <PillButton label="Update plan" disabled={!valid || !Object.keys(changes).length} onPress={() => onSave(changes)} style={{ marginTop: 18 }} />
-                <PillButton label="Cancel" variant="secondary" onPress={onClose} style={{ marginTop: 10 }} />
+                <PillButton label="Cancel" variant="secondary" onPress={onClose} style={{ marginTop: 10, backgroundColor: t.fillStrong, borderWidth: 0, shadowOpacity: 0, elevation: 0 }} />
             </ScrollView>
         </BottomSheet>
     );
@@ -66,6 +66,6 @@ const getStyles = (colors, t) => StyleSheet.create({
     label: { fontSize: 12.5, fontWeight: "600", color: colors.textSecondary, marginTop: 14, marginBottom: 6 },
     hint: { fontSize: 12.5, color: colors.textSecondary, marginTop: 8, lineHeight: 18 },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    chip: { ...surfaceStyle(t), borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 8 },
+    chip: { backgroundColor: t.fillStrong, borderWidth: 1, borderColor: "transparent", borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 8 },
     chipText: { fontSize: 13.5, fontWeight: "600" },
 });

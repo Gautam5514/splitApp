@@ -1,7 +1,8 @@
 import { Skeleton, SkeletonCircle } from "@/components/ui/Skeleton";
 import { useTheme } from "@/context/ThemeContext";
-import { Block, IconCircle, ListRow, PillButton, PillInput, SectionLabel } from "@/components/ui/Design";
-import { surfaceStyle, tokens } from "@/constants/design";
+import { Block, IconCircle, ListRow, PillButton, PillInput } from "@/components/ui/Design";
+import { flatSurface, tokens } from "@/constants/design";
+import { SCREEN_GUTTER } from "@/constants/layout";
 import {
     ArrowDownCircle,
     ArrowUpCircle,
@@ -15,7 +16,6 @@ import {
     SmilePlus,
     Smartphone,
     X,
-    Zap,
 } from "lucide-react-native";
 import { Alert } from "@/lib/alert";
 import { formatMoney } from "@/lib/groupPresets";
@@ -36,6 +36,8 @@ export default function GroupBalanceSection({
     onConfirmSettlement,
     onRejectSettlement,
     onCancelSettlement,
+    // "all" (default) · "settle" = only who-pays-whom · "balances" = only the per-member list
+    sections = "all",
 }) {
     const { colors, theme } = useTheme();
     const isDark = theme === "dark";
@@ -155,25 +157,18 @@ export default function GroupBalanceSection({
         closeForm();
     };
 
+    const showBalances = sections !== "settle";
+    const showSettle = sections !== "balances";
+
     return (
         <View>
-            {/* Header */}
-            <SectionLabel
-                right={
-                    hasBalances ? (
-                        <Text style={styles.headerCount}>
-                            {balances.balances.length}{" "}
-                            {balances.balances.length === 1 ? "entry" : "entries"}
-                        </Text>
-                    ) : null
-                }
-            >
-                Balances
-            </SectionLabel>
+            {showBalances && (
+            <>
+            <LineHeading styles={styles} title="Balances" />
 
             {/* Still fetching: skeleton, not the "No balances" message */}
             {loading ? (
-                <Block>
+                <Block style={styles.canvasBlock}>
                     <View style={{ gap: 14, paddingVertical: 6 }}>
                         {[0, 1, 2].map((i) => (
                             <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -186,7 +181,7 @@ export default function GroupBalanceSection({
                     </View>
                 </Block>
             ) : !hasBalances ? (
-                <Block>
+                <Block style={styles.canvasBlock}>
                     <View style={styles.emptyContainer}>
                         <View style={styles.emptyIcon}>
                             <Coins size={22} color={colors.primary} />
@@ -206,7 +201,7 @@ export default function GroupBalanceSection({
                             <ListRow
                                 key={b.userId || i}
                                 leading={
-                                    <IconCircle size={40}>
+                                    <IconCircle size={40} tint={t.outline}>
                                         {isUp ? (
                                             <ArrowUpCircle size={18} color={colors.success} />
                                         ) : isDown ? (
@@ -240,15 +235,16 @@ export default function GroupBalanceSection({
                     })}
                 </Block>
             )}
+            </>
+            )}
 
-            {/* Smart Settlements */}
-            {hasSuggestions && (
+            {/* Who pays whom */}
+            {showSettle && hasSuggestions && (
                 <>
-                    <SectionLabel
-                        right={<Zap size={16} color={colors.warning} />}
-                    >
-                        Smart Settlements
-                    </SectionLabel>
+                    <LineHeading
+                        styles={styles}
+                        title="Settle up"
+                    />
 
                     <View style={styles.suggestionsList}>
                         {balances.suggestions.map((s, i) => {
@@ -262,17 +258,31 @@ export default function GroupBalanceSection({
 
                             return (
                                 <Block key={i} style={styles.suggestionItem}>
-                                    <Text style={styles.suggestionText}>
-                                        <Text style={styles.suggestionFrom}>
-                                            {isDebtor ? "You" : s.from.name}
+                                    {/* "You owe ₹500 to Asha" and its action share one line */}
+                                    <View style={styles.suggestionRow}>
+                                        <Text style={[styles.suggestionText, styles.suggestionRowText]}>
+                                            <Text style={styles.suggestionFrom}>
+                                                {isDebtor ? "You" : s.from.name}
+                                            </Text>
+                                            <Text style={styles.suggestionNormal}>{isDebtor ? " owe " : " owes "}</Text>
+                                            <Text style={styles.suggestionAmount}>{money(amt)}</Text>
+                                            <Text style={styles.suggestionNormal}> to </Text>
+                                            <Text style={styles.suggestionTo}>
+                                                {isCreditor ? "You" : s.to.name}
+                                            </Text>
                                         </Text>
-                                        <Text style={styles.suggestionNormal}> owe </Text>
-                                        <Text style={styles.suggestionAmount}>{money(amt)}</Text>
-                                        <Text style={styles.suggestionNormal}> to </Text>
-                                        <Text style={styles.suggestionTo}>
-                                            {isCreditor ? "You" : s.to.name}
-                                        </Text>
-                                    </Text>
+                                        {!pending && !isFormOpen && canSettle && (isDebtor || isCreditor) ? (
+                                            <PillButton
+                                                variant="secondary"
+                                                onPress={() => openForm(i)}
+                                                icon={<CheckCircle2 size={15} color={isDebtor ? colors.success : colors.warning} />}
+                                                label={isDebtor ? "I've Paid" : "Received"}
+                                                accessibilityLabel={isDebtor ? `I've Paid ${money(amt)}` : `Mark ${money(amt)} as Received`}
+                                                style={styles.inlineBtn}
+                                                textStyle={[styles.inlineBtnText, { color: isDebtor ? colors.success : colors.warning }]}
+                                            />
+                                        ) : null}
+                                    </View>
 
                                     {pending ? (
                                         <PendingSettlementRow
@@ -346,6 +356,7 @@ export default function GroupBalanceSection({
                                             </View>
                                         </View>
                                     ) : canSettle && isDebtor ? (
+                                        (s.to.upiId || s.to.upiQrUrl) && currency === "INR" ? (
                                         <View style={{ gap: 8 }}>
                                             {(s.to.upiId || s.to.upiQrUrl) && currency === "INR" ? (
                                                 <PillButton
@@ -374,28 +385,10 @@ export default function GroupBalanceSection({
                                                     <Text style={styles.payAltText}>Show QR / UPI ID instead</Text>
                                                 </TouchableOpacity>
                                             ) : null}
-                                            <PillButton
-                                                variant="secondary"
-                                                onPress={() => openForm(i)}
-                                                icon={<CheckCircle2 size={16} color={colors.success} />}
-                                                label={`I've Paid ${money(amt)}`}
-                                                style={styles.actionBtn}
-                                                textStyle={[styles.actionBtnText, { color: colors.success }]}
-                                            />
-                                            {(s.to.upiId || s.to.upiQrUrl) && currency === "INR" ? (
-                                                <Text style={styles.thirdPartyNote}>After paying, tap &quot;I&apos;ve Paid&quot; so {s.to.name} can confirm.</Text>
-                                            ) : null}
+                                            <Text style={styles.thirdPartyNote}>After paying, tap &quot;I&apos;ve Paid&quot; so {s.to.name} can confirm.</Text>
                                         </View>
-                                    ) : canSettle && isCreditor ? (
-                                        <PillButton
-                                            variant="secondary"
-                                            onPress={() => openForm(i)}
-                                            icon={<CheckCircle2 size={16} color={colors.warning} />}
-                                            label={`Mark ${money(amt)} as Received`}
-                                            style={styles.actionBtn}
-                                            textStyle={[styles.actionBtnText, { color: colors.warning }]}
-                                        />
-                                    ) : canSettle ? (
+                                        ) : null
+                                    ) : canSettle && isCreditor ? null : canSettle ? (
                                         <Text style={styles.thirdPartyNote}>
                                             Only the people involved can record this settlement
                                         </Text>
@@ -413,11 +406,13 @@ export default function GroupBalanceSection({
 
             {/* Pending settlements the user is a party to but that have no
                 matching suggestion row (debt got rerouted). Always confirmable. */}
-            {orphanPending.length > 0 && (
+            {showSettle && orphanPending.length > 0 && (
                 <>
-                    <SectionLabel right={<Clock size={16} color={colors.warning} />}>
-                        Pending Settlements
-                    </SectionLabel>
+                    <LineHeading
+                        styles={styles}
+                        title="Pending Settlements"
+                        right={<Clock size={16} color={colors.warning} />}
+                    />
                     <View style={styles.suggestionsList}>
                         {orphanPending.map((pending) => {
                             const fromMe = String(pending.fromUserId._id) === String(meId);
@@ -627,6 +622,17 @@ function PendingSettlementRow({ pending, meId, money, colors, styles, onConfirm,
     );
 }
 
+/** Section heading: title on the left, then a line across the rest of the row. */
+function LineHeading({ title, right, styles }) {
+    return (
+        <View style={styles.lineHeading}>
+            <Text style={styles.lineHeadingTitle}>{title}</Text>
+            <View style={styles.lineHeadingRule} />
+            {right}
+        </View>
+    );
+}
+
 const getStyles = (colors, t) => StyleSheet.create({
     headerCount: {
         fontSize: 12,
@@ -640,7 +646,7 @@ const getStyles = (colors, t) => StyleSheet.create({
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: t.surfaceAlt,
+        backgroundColor: t.outline,
         justifyContent: "center",
         alignItems: "center",
         marginBottom: 12,
@@ -650,8 +656,15 @@ const getStyles = (colors, t) => StyleSheet.create({
         color: colors.textSecondary,
         textAlign: "center",
     },
+    // Flat look: rows and suggestions sit straight on the canvas (no card).
     balancesBlock: {
-        paddingVertical: 6,
+        ...flatSurface,
+        paddingVertical: 0,
+    },
+    canvasBlock: {
+        ...flatSurface,
+        paddingHorizontal: SCREEN_GUTTER,
+        paddingVertical: 0,
     },
     balanceAmount: {
         fontSize: 15,
@@ -670,8 +683,25 @@ const getStyles = (colors, t) => StyleSheet.create({
         gap: 0,
     },
     suggestionItem: {
+        ...flatSurface,
+        paddingHorizontal: SCREEN_GUTTER,
+        paddingVertical: 0,
         gap: 12,
     },
+    // Heading: title, then a line running to the right edge (or the right-hand bit)
+    lineHeading: {
+        flexDirection: "row", alignItems: "center", gap: 12,
+        paddingHorizontal: SCREEN_GUTTER, marginTop: 8, marginBottom: 12,
+    },
+    lineHeadingTitle: { fontSize: 17, fontWeight: "600", letterSpacing: -0.2, color: colors.text },
+    lineHeadingRule: { flex: 1, height: 1, backgroundColor: t.outline },
+    suggestionRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+    suggestionRowText: { flex: 1, minWidth: 0 },
+    inlineBtn: {
+        height: 38, borderRadius: 19, paddingHorizontal: 14, gap: 6, flexShrink: 0,
+        backgroundColor: t.fill, borderWidth: 0, shadowOpacity: 0, elevation: 0,
+    },
+    inlineBtnText: { fontSize: 13.5, fontWeight: "700" },
     suggestionText: {
         fontSize: 14,
         lineHeight: 21,
@@ -704,8 +734,7 @@ const getStyles = (colors, t) => StyleSheet.create({
         fontWeight: "700",
     },
     confirmBox: {
-        ...surfaceStyle(t),
-        backgroundColor: t.surfaceAlt,
+        backgroundColor: t.fill,
         borderRadius: 18,
         padding: 14,
         gap: 12,
@@ -753,8 +782,7 @@ const getStyles = (colors, t) => StyleSheet.create({
         color: t.onInk,
     },
     pendingBox: {
-        ...surfaceStyle(t),
-        backgroundColor: t.surfaceAlt,
+        backgroundColor: t.fill,
         borderRadius: 18,
         padding: 14,
         gap: 12,
