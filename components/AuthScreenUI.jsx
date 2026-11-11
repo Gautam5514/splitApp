@@ -14,7 +14,7 @@ export function AuthScreen({ children }) {
       <SafeAreaView style={styles.root}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.brand}>
-            <Image source={require("../assets/images/favicon.png")} style={styles.brandIcon} />
+            <Image source={isDark ? require("../assets/images/favicon-dark.png") : require("../assets/images/favicon.png")} style={styles.brandIcon} />
             <Text style={[styles.brandName, { color: colors.text }]}>SplitEase</Text>
           </View>
           <View style={styles.content}>{children}</View>
