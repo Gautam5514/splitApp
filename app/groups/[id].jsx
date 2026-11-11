@@ -10,6 +10,7 @@ import AddPeopleSheet from "@/components/people/AddPeopleSheet";
 import GroupSettingsSheet from "@/components/group/GroupSettingsSheet";
 import GroupTypeCard from "@/components/group/GroupTypeCard";
 import PendingMembers from "@/components/group/PendingMembers";
+import StatementCard from "@/components/group/StatementCard";
 import { formatMoney, groupTypeMeta } from "@/lib/groupPresets";
 import NotepadSection from "@/components/Notepad/NotepadSection";
 import OcrViewModal from "@/components/OcrViewModal";
@@ -599,6 +600,8 @@ export default function GroupDetailPage() {
                     onRejectSettlement={handleRejectSettlement}
                     onCancelSettlement={handleCancelSettlement}
                 />
+
+                <StatementCard groupId={groupId} isCreator={isCreator} reloadKey={group.isCompleted ? 1 : 0} />
 
                 {/* 4 · Expenses, newest first */}
                 <SectionLabel
